@@ -15,7 +15,7 @@ Lazarus3.2以降でプロジェクトファイルalphadlw.lpiを開いてビル�
 
 https://github.com/salvadordf/WebView4Delphi
 
-https://regex.sorokin.engineer/tregexpr/#lineseparators
+https://github.com/andgineer/TRegExpr
 
 ### 使い方
 Windows10/11上でalphadlw.exeを起動して、ダウンロードしたいアルファポリス小説トップページのURL (保存したいテキストファイル名)を入力して「ダウンロード」ボタンをクリックします。正常に実行されればalphadlw.exeがあるフォルダにダウンロードした青空文庫形式のテキストファイルが補zんされます。
