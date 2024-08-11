@@ -8,10 +8,13 @@ Windows10/11上で動作します。
 
 ### 実行ファイルの作り方
 Lazarus3.2以降でプロジェクトファイルalphadlw.lpiを開いてビルドして下さい。
+
 または、Delphi (XE2以降)でalphadlw.dprojを開いてビルドしてください。
 
 尚、ビルドするためには、WebView4DelphiとTRegExprが必要です。
+
 https://github.com/salvadordf/WebView4Delphi
+
 https://regex.sorokin.engineer/tregexpr/#lineseparators
 
 ### 使い方
