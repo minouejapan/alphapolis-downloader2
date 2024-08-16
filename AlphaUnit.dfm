@@ -3,7 +3,7 @@ object Alphadl: TAlphadl
   Top = 31
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
-  Caption = #12450#12523#12501#12449#12509#12522#12473#23567#35500#12480#12454#12531#12525#12540#12480#12540'2 [1.2.0.0]'
+  Caption = #12450#12523#12501#12449#12509#12522#12473#23567#35500#12480#12454#12531#12525#12540#12480#12540'2 [1.3.0.0]'
   ClientHeight = 81
   ClientWidth = 802
   Color = clBtnFace

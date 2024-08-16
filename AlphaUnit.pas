@@ -324,13 +324,15 @@ end;
 function TrimSpace(Base: string): string;
 var
   p: integer;
-  c: char;
+  //c: char;  // Lazarus対応
+  c: string;
 begin
   while True do
   begin
     if UTF8Length(Base) = 0 then
       Break;
-    c := Base[1];
+    //c := Base[1];
+    c := UTF8Copy(Base, 1, 1); // Lazarus対応
     if UTF8Pos(c, ' 　'#$09#$0D#$0A) > 0 then
       UTF8Delete(Base, 1, 1)
     else
@@ -341,7 +343,8 @@ begin
     p := UTF8Length(Base);
     if p = 0 then
       Break;
-    c := Base[p];
+    //c := Base[p];
+    c := UTF8Copy(Base, p, 1); // Lazarus対応
     if UTF8Pos(c, ' 　'#$09#$0D#$0A) > 0 then
       UTF8Delete(Base, p, 1)
     else
