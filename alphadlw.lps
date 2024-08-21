@@ -8,9 +8,9 @@
       <Unit>
         <Filename Value="alphadlw.dpr"/>
         <IsPartOfProject Value="True"/>
-        <UsageCount Value="20"/>
+        <CursorPos Y="27"/>
+        <UsageCount Value="52"/>
         <Loaded Value="True"/>
-        <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit>
       <Unit>
         <Filename Value="AlphaUnit.pas"/>
@@ -21,25 +21,140 @@
         <UnitName Value="alphaunit"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <CursorPos X="62" Y="10"/>
-        <UsageCount Value="20"/>
+        <CursorPos X="64" Y="10"/>
+        <UsageCount Value="52"/>
+        <Bookmarks Count="1">
+          <Item0 X="2" Y="1021" ID="1"/>
+        </Bookmarks>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
-        <DefaultSyntaxHighlighter Value="Delphi"/>
+      </Unit>
+      <Unit>
+        <Filename Value="nvdllib.pas"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="214"/>
+        <CursorPos Y="11"/>
+        <UsageCount Value="51"/>
+        <Loaded Value="True"/>
       </Unit>
     </Units>
-    <JumpHistory HistoryIndex="2">
+    <JumpHistory HistoryIndex="28">
       <Position>
         <Filename Value="AlphaUnit.pas"/>
-        <Caret Line="1018" Column="18" TopLine="1004"/>
+        <Caret Line="159" TopLine="129"/>
       </Position>
       <Position>
         <Filename Value="AlphaUnit.pas"/>
-        <Caret Line="1022" Column="72" TopLine="1004"/>
+        <Caret Line="152" Column="22" TopLine="129"/>
       </Position>
       <Position>
         <Filename Value="AlphaUnit.pas"/>
-        <Caret Line="1072" Column="7" TopLine="1049"/>
+        <Caret Line="842" Column="26" TopLine="821"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="191" Column="10" TopLine="174"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="827" Column="102" TopLine="814"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1016" TopLine="1005"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1014" Column="26" TopLine="996"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1024" TopLine="1011"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1016" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1017" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1018" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1013" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1022" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1023" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1026" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1028" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1001" TopLine="983"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1039" Column="22" TopLine="1014"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1016" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1017" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1018" TopLine="1010"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1013" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1022" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1023" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1032" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1039" TopLine="1011"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="1035" Column="19" TopLine="1007"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="613" TopLine="595"/>
+      </Position>
+      <Position>
+        <Filename Value="AlphaUnit.pas"/>
+        <Caret Line="983" TopLine="955"/>
       </Position>
     </JumpHistory>
     <RunParams>
