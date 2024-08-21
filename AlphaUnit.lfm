@@ -5,7 +5,7 @@ object Alphadl: TAlphadl
   Width = 802
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
-  Caption = 'アルファポリス小説ダウンローダー2 [1.3.0.0]'
+  Caption = 'アルファポリス小説ダウンローダー2 '
   ClientHeight = 81
   ClientWidth = 802
   Color = clBtnFace
@@ -22,6 +22,7 @@ object Alphadl: TAlphadl
   OnCreate = FormCreate
   OnKeyPress = FormKeyPress
   OnShow = FormShow
+  LCLVersion = '3.2.0.0'
   object Panel1: TPanel
     Left = 0
     Height = 2

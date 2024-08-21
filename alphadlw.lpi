@@ -81,6 +81,10 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="alphaunit"/>
       </Unit>
+      <Unit>
+        <Filename Value="nvdllib.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

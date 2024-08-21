@@ -1,6 +1,11 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  1.4 2024/08/21  各ページ情報取得が不完全だったため取得ミスが発生する場合があった不具合を修正した
+                  ページ取得失敗時のリロード表示が目障りなため修正した
+                  DL処理の共通処理部分を別ユニットとすることでバグ発生時の修正作業が一回で済むようにした
+                  キャプションバーへのバージョン情報表示を自動化した
+  1.3 2024/08/17  Lazarus共有化に変更漏れがあり各話タイトルの見出しタグ付加処理が不完全だった不具合を修正した
   1.2 2024/08/11  EdgeブラウザコンポーネントWebView4Delphiのバージョンを1.0.2045.28から
                   現時点の最新版1.0.2592.51に変更した
                   ソースコードをDelphi/Lazarus共用化した
@@ -153,6 +158,9 @@ implementation
 
 { TAlphadl }
 
+uses
+  nvdllib;
+
 const
   // データ抽出用の識別タグ
   STITLEB  = '<h1 class="title">';     // 小説表題
@@ -182,62 +190,18 @@ const
   SHEAD    = '<span class="content-status complete">';
   SBOMISS  = '<div class=dots-indicator id=LoadingEpisode>';
 
-  // 青空文庫形式
-  AO_RBI = '｜';							// ルビのかかり始め(必ずある訳ではない)
-  AO_RBL = '《';              // ルビ始め
-  AO_RBR = '》';              // ルビ終わり
-  AO_TGI = '［＃';            // 青空文庫書式設定開始
-  AO_TGO = '］';              //        〃       終了
-  AO_CPI = '［＃「';          // 見出しの開始
-  AO_CPT = '」は大見出し］';	// 章
-  AO_SEC = '」は中見出し］';  // 話
-  AO_PRT = '」は小見出し］';
+  CRLF     = #$0D#$0A;
 
-  AO_CPB = '［＃大見出し］';        // 2022/12/28 こちらのタグに変更
-  AO_CPE = '［＃大見出し終わり］';
-  AO_SEB = '［＃中見出し］';
-  AO_SEE = '［＃中見出し終わり］';
-  AO_PRB = '［＃小見出し］';
-  AO_PRE = '［＃小見出し終わり］';
-
-  AO_DAI = '［＃ここから';		// ブロックの字下げ開始
-  AO_DAO = '［＃ここで字下げ終わり］';
-  AO_DAN = '字下げ］';
-  AO_PGB = '［＃改丁］';			// 改丁と会ページはページ送りなのか見開き分の
-  AO_PB2 = '［＃改ページ］';	// 送りかの違いがあるがどちらもページ送りとする
-  AO_BED = '［＃本文終わり］';// 本文終わり(Body End)
-  AO_SM1 = '」に傍点］';			// ルビ傍点
-  AO_SM2 = '」に丸傍点］';		// ルビ傍点 どちらもsesami_dotで扱う
-  AO_EMB = '［＃丸傍点］';        // 横転開始
-  AO_EME = '［＃丸傍点終わり］';  // 傍点終わり
-  AO_KKL = '［＃ここから罫囲み］' ;     // 本来は罫囲み範囲の指定だが、前書きや後書き等を
-  AO_KKR = '［＃ここで罫囲み終わり］';  // 一段小さい文字で表記するために使用する
-  AO_END = '底本：';          // ページフッダ開始（必ずあるとは限らない）
-  AO_PIB = '［＃リンクの図（';          // 画像埋め込み
-  AO_PIE = '）入る］';        // 画像埋め込み終わり
-  AO_CVB = '［＃表紙の図（';  // 表紙画像指定
-  AO_CVE = '）入る］';        // 終わり
-
-  CRLF   = #$0D#$0A;
-
-
-{ 青空文庫形式
-
-  テキストヘッダ
-		作品の表題
-		原作の表題（翻訳作品で、底本に記載のある場合）
-		副題（副題がある場合）
-		原作の副題（副題がある翻訳作品で、底本に記載のある場合）
-		著者名
-		翻訳者名（翻訳の場合）
-
-	ルビ
-  	<ruby><rb>亜米利加</rb><rp>（</rp><rt>アメリカ</rt><rp>）</rp></ruby>
-  	亜米利加《アメリカ》
-}
 
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
+  // 本文の改行タグを削除する
+  function ChangeBRK(Base: string): string;
+  begin
+    Result := UTF8StringReplace(Base, '<br />', '', [rfReplaceAll]);
+    Result := UTF8StringReplace(Result, '<br>', '', [rfReplaceAll]);
+  end;
+
 
 var
   TextPage,
@@ -308,69 +272,6 @@ begin
   end;
 end;
 
-// HTMLテキスト内のCR/LF(#$0D#$0A)を除去しTAB文字を半角スペースに変換する
-function ElimCRLF(Base: string): string;
-var
-  tmp: string;
-begin
-  tmp := UTF8StringReplace(Base, #$0D, '', [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  #$0A, '', [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  #$09, ' ', [rfReplaceAll]);
-  Result := tmp;
-end;
-
-// 指定された文字列の前と後のスペース(' '/'　'/#$20/#$09/#$0D/#$0A)を除去する
-// '　　文字　列　　' → '文字　列'
-function TrimSpace(Base: string): string;
-var
-  p: integer;
-  //c: char;  // Lazarus対応
-  c: string;
-begin
-  while True do
-  begin
-    if UTF8Length(Base) = 0 then
-      Break;
-    //c := Base[1];
-    c := UTF8Copy(Base, 1, 1); // Lazarus対応
-    if UTF8Pos(c, ' 　'#$09#$0D#$0A) > 0 then
-      UTF8Delete(Base, 1, 1)
-    else
-      Break;
-  end;
-  while True do
-  begin
-    p := UTF8Length(Base);
-    if p = 0 then
-      Break;
-    //c := Base[p];
-    c := UTF8Copy(Base, p, 1); // Lazarus対応
-    if UTF8Pos(c, ' 　'#$09#$0D#$0A) > 0 then
-      UTF8Delete(Base, p, 1)
-    else
-      Break;
-  end;
-  Result := Base;
-end;
-
-// 本文の改行タグを削除する
-function ChangeBRK(Base: string): string;
-begin
-  Result := UTF8StringReplace(Base, '<br />', '', [rfReplaceAll]);
-  Result := UTF8StringReplace(Result, '<br>', '', [rfReplaceAll]);
-end;
-
-// 本文の青空文庫ルビ指定に用いられる文字があった場合誤作動しないように青空文庫代替表記に変換する(2022/3/25)
-function ChangeAozoraTag(Base: string): string;
-var
-  tmp: string;
-begin
-  tmp := UTF8StringReplace(Base, '《', '※［＃始め二重山括弧、1-1-52］',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '》', '※［＃終わり二重山括弧、1-1-53］',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '｜', '※［＃縦線、1-1-35］',   [rfReplaceAll]);
-  Result := tmp;
-end;
-
 // 本文のルビタグを青空文庫形式に変換する
 function ChangeRuby(Base: string): string;
 var
@@ -393,70 +294,6 @@ begin
   tmp := UTF8StringReplace(tmp,  '</span>',       '',     [rfReplaceAll]);
   Result := tmp;
 end;
-
-// Delphi XE2ではUTF8Pos関数に検索開始位置を指定出来ないための代替え
-function PosN(SubStr, Str: string; StartPos: integer): integer;
-var
-  tmp: string;
-  p: integer;
-begin
-  tmp := UTF8Copy(Str, StartPos, UTF8Length(Str));
-  p := UTF8Pos(SubStr, tmp);
-  if p > 0 then
-    Result := p + StartPos - 1  // 1ベーススタートのため1を引く
-  else
-    Result := 0;
-end;
-
-// HTML特殊文字の処理
-// 1)エスケープ文字列 → 実際の文字
-// 2)&#x????; → 通常の文字
-function Restore2RealChar(Base: string): string;
-var
-  tmp, cd: string;
-  w: integer;
-  ch: Char;
-  r: TRegExpr;
-begin
-  // エスケープされた文字
-  tmp := UTF8StringReplace(Base, '&lt;',      '<',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&gt;',      '>',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&quot;',    '"',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&nbsp;',    ' ',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&yen;',     '\',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&brvbar;',  '|',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&copy;',    '©',  [rfReplaceAll]);
-  tmp := UTF8StringReplace(tmp,  '&amp;',     '&',  [rfReplaceAll]);
-  // &#????;にエンコードされた文字をデコードする(2023/3/19)
-  // 正規表現による処理に変更した(2024/3/9)
-  r := TRegExpr.Create;
-  try
-    r.Expression  := '&#.*?;';
-    r.InputString := tmp;
-    if r.Exec then
-    begin
-      repeat
-        UTF8Delete(tmp, r.MatchPos[0], r.MatchLen[0]);
-        cd := r.Match[0];
-        UTF8Delete(cd, 1, 2);           // &#を削除する
-        UTF8Delete(cd, UTF8Length(cd), 1);  // 最後の;を削除する
-        if cd[1] = 'x' then         // 先頭が16進数を表すxであればDelphiの16進数接頭文字$に変更する
-          cd[1] := '$';
-        try
-          w := StrToInt(cd);
-          ch := Char(w);
-        except
-          ch := '?';
-        end;
-        UTF8Insert(ch, tmp, r.MatchPos[0]);
-      until not r.ExecNext;
-    end;
-  finally
-    r.Free;
-  end;
-  Result := tmp;
-end;
-
 // 埋め込まれた画像リンクを青空文庫形式に変換する
 // 但し、画像ファイルはダウンロードせずにリンク先をそのまま埋め込む
 function ChangeImage(Base: string): string;
@@ -491,59 +328,24 @@ begin
   Result := Base;
 end;
 
-// タイトル名をファイル名として使用出来るかどうかチェックし、使用不可文字が
-// あれば修正する('-'に置き換える)
-// フォルダ名の最後が'.'の場合、フォルダ作成時に"."が無視されてフォルダ名が
-// 見つからないことになるため'.'も'-'で置き換える
-// LazarusではUTF8文字列をインデックス(string[])でアクセス出来ないため、
-// UTF8Copy, UTF8Delete, UTF8Insert処理で置き換える
-{$IFDEF FPC}
-function PathFilter(PassName: string): string;
+// 本文先頭の半角スペースを除去する
+function TrimHead(Str: string): string;
 var
-  i, l: integer;
-  path: string;
-  tmp: AnsiString;
-  ch: string;     // LazarusではCharにUTF-8の文字を代入できないためstringで定義する
+  ch: string;
 begin
-  // ファイル名を一旦ShiftJISに変換して再度Unicode化することでShiftJISで使用
-  // 出来ない文字を除去する
-  tmp := UTF8ToWinCP(PassName);
-  path := WinCPToUTF8(tmp);      // これでUTF-8依存文字は??に置き換わる
-  l :=  UTF8Length(path);
-  for i := 1 to l do
-  begin
-    ch := UTF8Copy(path, i, 1); // i番目の文字を取り出す
-    if UTF8Pos(ch, '\/;:*?"<>|. '+#$09) > 0 then // 文字種が使用不可であれば
-    begin
-      UTF8Delete(path, i, 1);                // 該当文字を削除して
-      UTF8Insert('-', path, i);              // 代わりに'-'を挿入する
+  repeat
+    if UTF8Length(Str) = 0 then
+      Break
+    else begin
+      ch := UTF8Copy(Str, 1, 1);
+      if ch = ' ' then
+        UTF8Delete(Str, 1, 1)
+      else
+        Break;
     end;
-  end;
-  Result := path;
+  until (True);
+  Result := Str;
 end;
-{$ELSE} // Delphiの場合
-function PathFilter(PassName: string): string;
-var
-	i, l: integer;
-  path: string;
-  tmp: AnsiString;
-  ch: char;
-begin
-  // ファイル名を一旦ShiftJISに変換して再度Unicode化することでShiftJISで使用
-  // 出来ない文字を除去する
-  tmp := AnsiString(PassName);
-	path := string(tmp);
-  l :=  UTF8Length(path);
-  for i := 1 to l do
-  begin
-  	ch := Char(path[i]);
-    if UTF8Pos(ch, '\/;:*?"<>|. '+#$09) > 0 then
-      path[i] := '-';
-  end;
-  Result := path;
-end;
-{$ENDIF}
-
 // 小説本文をHTMLから抜き出して整形する
 function ParsePage(Page: string): Boolean;
 var
@@ -610,6 +412,7 @@ begin
             body := ChangeRuby(body);       // ルビのタグを変換する
             body := ChangeEm(body);         // 強調（傍点）タグを変換する
             body := Restore2RealChar(body); // エスケースされた特殊文字を本来の文字に変換する
+            body := TrimHead(body);         // 本文先頭の余分なスペースを除去する
 
             if UTF8Length(capt) > 0 then
               TextPage.Add(AO_CPB + capt + AO_CPE);
@@ -806,8 +609,7 @@ begin
 
   SetActiveWindow(Handle);
   // 各話本文を表示させるためにWebページにフォーカスを当てる
-  //WVWindowParent1.SetFocus;
-  WV2.SetFocus;
+  WVWindowParent1.SetFocus;
   WV2.Navigate(aURL);
   while WV2.IsNavigating do
   begin
@@ -839,7 +641,7 @@ end;
 
 procedure TAlphadl.FormCreate(Sender: TObject);
 var
-  cfg, opt, op: string;
+  cfg, opt, op, ver: string;
   f: TextFile;
   i: integer;
 begin
@@ -879,6 +681,9 @@ begin
       CloseFile(f);
     end;
   end;
+  // ファイルバージョンをキャプションに表示する
+  ver := GetVersionInfo(Application.ExeName);
+  Caption := 'アルファポリス小説ダウンローダー2 [' + ver + ']';
 
   if ParamCount = 0 then
   begin
@@ -975,9 +780,11 @@ end;
 procedure TAlphadl.StartBtnClick(Sender: TObject);
 var
   i, cnt, j, sc, ct, n: integer;
-  sttl: string;
+  sttl, stat: string;
 label
   Quit;
+const
+  LoadErr = 'コンテンツ保護のため非表示にしました。';
 begin
   if UTF8Pos('https://www.alphapolis.co.jp/novel/', URL.Text) = 0 then
   begin
@@ -1023,7 +830,8 @@ begin
 
   for i := j to cnt do
   begin
-    Status.Caption := '各話を取得中 [' + Format('%3d', [i]) + '/' + Format('%3d', [cnt]) + '(' + Format('%d', [(ct * 100) div sc]) + '%)]';
+    stat := '各話を取得中 [' + Format('%3d', [i]) + '/' + Format('%3d', [cnt]) + '(' + Format('%d', [(ct * 100) div sc]) + '%)]';
+    Status.Caption := stat;
 
     Done := False;
     URL.Text := PageList[i - 1];
@@ -1031,33 +839,19 @@ begin
 
     n := 1;
     TBuff := GetHTMLSrc(URL.Text);
-    While UTF8Pos(sttl, TBuff) = 0 do
+    //While UTF8Pos(sttl, TBuff) = 0 do
+    // 取得した情報に各話タイトルが存在しない、もしくは「非表示にしました」が
+    // 含まれている場合は正しい情報を取得出来ていないためリトライする
+    While {(UTF8Pos(LoadErr, TBuff) > 0) or }(UTF8Pos(sttl, TBuff) = 0) or (UTF8Pos(SBOMISS, Tbuff) > 0) do
     begin
-      Status.Caption := '情報を取得出来ないためリロード中(' + IntToStr(n) + ')';
-      Sleep(10);
+      Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
+      Sleep(100);
       TBuff := GetHTMLSrc(URL.Text);
       Inc(n);
-      if n = 20 then
-      begin
-        TextPage.Add('★エラー：ページDLタイムアウト');
-        Break;
-      end;
-      if Cancel then
-        Break;
-    end;
-    n := 1;
-    // 各話ページにフォーカスがないと本文が消えて取得出来なくなるため
-    // その場合は再度取得を試みる
-    while UTF8Pos(SBOMISS, TBuff) > 0 do
-    begin
-      Status.Caption := '情報を取得出来ないためリロード中(' + IntToStr(n) + ')';
-      Sleep(10);
-      TBuff := GetHTMLSrc(URL.Text);
-      Inc(n);
-      // 再取得を30回試みても取得出来ない場合はエラーとする
       if n = 30 then
       begin
-        TextPage.Add('★エラー：ページDLタイムアウト');
+        TextPage.Add('★エラー：リトライ回数超過');
+        TBuff := '';
         Break;
       end;
       if Cancel then
@@ -1072,13 +866,12 @@ begin
       SendMessage(hWnd, WM_DLINFO, i, 1);
     if Cancel then
       Break;
-    Status.Caption := '各話を取得中 [' + Format('%3d', [i]) + '/' + Format('%3d', [cnt]) + '(' + Format('%d', [(ct * 100) div sc]) + '%)]';
     Elapsed.Caption := '経過時間：' + FormatDateTime('nn:ss', Now - StartTime);
     Inc(ct);
   end;
   if not Cancel then
   begin
-    Status.Caption := Status.Caption + '・・完了';
+    Status.Caption := stat + '・・完了';
     if FileName <> '' then
     begin
       //MessageDlg(FileName, mtWarning, [mbOK], 0);
@@ -1187,7 +980,6 @@ end;
 
 procedure TAlphadl.WV2LostFocus(Sender: TObject);
 begin
-  //WV2.SetFocus;
 end;
 
 procedure TAlphadl.WV2NavigationCompleted(Sender: TObject;
@@ -1202,7 +994,8 @@ end;
 procedure TAlphadl.WV2RetrieveHTMLCompleted(Sender: TObject;
   aResult: boolean; const aHTML: wvstring);
 var
-  src: string;
+  src, body: string;
+  r: TRegExpr;
 begin
   if aHTML <> '' then
   begin
@@ -1212,24 +1005,32 @@ begin
 
     if not Done then
     begin
-      // 取得したHTMLソースで本文を取得出来たかどうかを確認する
-      // 以下のコードがあれば本文を取得出来たと見なす
-      if UTF8Pos('<div class=text  id=novelBody', TBuff) > 1 then
-      begin
-        Done := True;
-      // 以下のコードがあればWebページからフォーカスが外れて本文が
-      // 非表示になっている状態なのでwebページにフォーカスを当てて
-      // 再度HTMLソース取得を試みる
-      end else if ExecRegExpr('<div class=text  id=novelBody.*?></div>', TBuff) then
+      // 本文部分を取得する(フォーカスが当たっていない場合は本文が空になる)
+      r := TRegExpr.Create('<div class=text  id=novelBody.*?></div>');
+      try
+        if r.Exec(TBuff) then
+        begin
+          body := UTF8Copy(TBuff, r.MatchPos[0], r.MatchLen[0]);
+          body := ReplaceRegExpr('<div class=text  id=novelBody.*?>', body, '');
+          body := ReplaceRegExpr('</div>', body, '');
+        end else
+          body := '';
+      finally
+        r.Free;
+      end;
+      // 本文がなければWebページからフォーカスが外れて本文が非表示になっている
+      // 状態なのでwebページにフォーカスを当てて再度HTMLソース取得を試みる
+      if UTF8Length(body) < 5 then
       begin
         SetActiveWindow(Handle);
-        WV2.SetFocus;
+        WVWindowParent1.SetFocus;
         WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
-      end;
+      end else
+        Done := True;
     end;
   end else begin
     SetActiveWindow(Handle);
-    WV2.SetFocus;
+    WVWindowParent1.SetFocus;
     WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
   end;
 end;
