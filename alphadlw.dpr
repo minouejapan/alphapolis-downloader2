@@ -12,7 +12,7 @@ uses
 {$ELSE}
   Forms, Interfaces,
 {$ENDIF}
-  AlphaUnit in 'AlphaUnit.pas' {Mahodl};
+  AlphaUnit in 'AlphaUnit.pas', nvdllib {Mahodl};
 
 {$R *.res}
 

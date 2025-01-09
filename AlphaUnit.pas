@@ -1,6 +1,11 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  1.6 2025/01/10  本文中の挿絵処理がおかしかった不具合を修正した
+                  ページ取得間違いが出ないように各話タイトル名でチェックしていたのを各話ページURLによる
+                  チェックに変更した(各話タイトルが1,2,3等の場合誤判定する場合があるため)
+  1.5 2024/08/22  ページ情報取得のタフネスを上げるため、リトライする際のインターバルを0.1→0.5秒に延長し、
+                  10回リトライしても駄目な場合は5秒間のインターバルを入れて再度リトライを繰り返すようにした
   1.4 2024/08/21  各ページ情報取得が不完全だったため取得ミスが発生する場合があった不具合を修正した
                   ページ取得失敗時のリロード表示が目障りなため修正した
                   DL処理の共通処理部分を別ユニットとすることでバグ発生時の修正作業が一回で済むようにした
@@ -182,9 +187,9 @@ const
   SBODYB   = '<div class=text  id=novelBody.*?>';
   SBODYE   = '</div>';
   SERRSTR  = '<div class=dots-indicator';
-  SPICTB   = '<div class=story-image>.*?<img src=';
-  //SPICTM   = ' target=_blank><img src=';
-  SPICTE   = ' alt=.*?</div>';
+  SPICTIN  = '<div class=story-image><a href=.*?><img src=.*? .*?></a></div>';
+  SPICTB   = '<div class=story-image><a href=.*?><img src=';
+  SPICTE   = ' .*?></a></div>';
   SCOVERB  = '<div class="cover">';
   SCOVERE  = '" alt=""/>';
   SHEAD    = '<span class="content-status complete">';
@@ -294,33 +299,23 @@ begin
   tmp := UTF8StringReplace(tmp,  '</span>',       '',     [rfReplaceAll]);
   Result := tmp;
 end;
+
 // 埋め込まれた画像リンクを青空文庫形式に変換する
 // 但し、画像ファイルはダウンロードせずにリンク先をそのまま埋め込む
 function ChangeImage(Base: string): string;
 var
-  p, p2: integer;
-  lnk: string;
+  org, lnk: string;
   r: TRegExpr;
 begin
-  r := TRegExpr.Create;
+  r := TRegExpr.Create;      // 不具合があったため全面書き換え(2025/1/9)
   try
-    r.Expression  := SPICTB;
+    r.Expression  := SPICTIN;
     while r.Exec(Base) do
     begin
-      p := r.MatchPos[0];
-      UTF8Delete(Base, p, r.MatchLen[0]);
-      r.Expression  := SPICTE;
-      if r.Exec(Base) then
-      begin
-        p2 := r.MatchPos[0];
-        lnk := UTF8Copy(Base, p, p2 - p);
-        UTF8Delete(Base, p, p2 - p + r.MatchLen[0]);
-        UTF8Insert(AO_PIE, Base, p);
-        UTF8Insert(lnk, Base, p);
-        UTF8Insert(AO_PIB, Base, p);
-        r.Expression  := SPICTB;
-      end else
-        Break;
+      org := r.Match[0];
+      lnk := ReplaceRegExpr(SPICTE, ReplaceRegExpr(SPICTB, org, ''), '');
+      lnk := AO_PIB + lnk + AO_PIE;
+      Base := UTF8StringReplace(Base, org, lnk, []);
     end;
   finally
     r.Free;
@@ -783,8 +778,6 @@ var
   sttl, stat: string;
 label
   Quit;
-const
-  LoadErr = 'コンテンツ保護のため非表示にしました。';
 begin
   if UTF8Pos('https://www.alphapolis.co.jp/novel/', URL.Text) = 0 then
   begin
@@ -835,27 +828,35 @@ begin
 
     Done := False;
     URL.Text := PageList[i - 1];
-    sttl := TitleList[i - 1];
+    //sttl := TitleList[i - 1];
+    sttl := PageList[i - 1];
 
     n := 1;
     TBuff := GetHTMLSrc(URL.Text);
-    //While UTF8Pos(sttl, TBuff) = 0 do
-    // 取得した情報に各話タイトルが存在しない、もしくは「非表示にしました」が
-    // 含まれている場合は正しい情報を取得出来ていないためリトライする
-    While {(UTF8Pos(LoadErr, TBuff) > 0) or }(UTF8Pos(sttl, TBuff) = 0) or (UTF8Pos(SBOMISS, Tbuff) > 0) do
+    // 取得した情報に各話タイトルが存在しない場合は正しい情報を
+    // 取得出来ていないためリトライする
+    While UTF8Pos(sttl, TBuff) = 0 do
     begin
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
-      Sleep(100);
-      TBuff := GetHTMLSrc(URL.Text);
-      Inc(n);
+      // リトライを20回×3セット行っても駄目だった場合はエラーとする
+      // リトライ回数が10回を超えたら一旦5秒インターバルをおいて再度繰り返す
       if n = 30 then
       begin
         TextPage.Add('★エラー：リトライ回数超過');
         TBuff := '';
         Break;
       end;
+      if (n mod 10) = 0 then
+      begin
+        Status.Caption := stat + 'リトライ失敗：5秒間待機';
+        Application.ProcessMessages;
+        Sleep(5000);
+      end;
       if Cancel then
         Break;
+      Inc(n);
+      Sleep(500);
+      TBuff := GetHTMLSrc(URL.Text);
     end;
     if not ParsePage(TBuff) then
     begin
@@ -1018,10 +1019,12 @@ begin
       finally
         r.Free;
       end;
-      // 本文がなければWebページからフォーカスが外れて本文が非表示になっている
-      // 状態なのでwebページにフォーカスを当てて再度HTMLソース取得を試みる
-      if UTF8Length(body) < 5 then
+      // 本文がない、もしくSBOMISSが含まれていれば、Webページからフォーカスが
+      // 外れて本文が非表示になっている状態なのでwebページにフォーカスを当てて
+      // 再度HTMLソース取得を試みる
+      if (UTF8Length(body) < 5) or (UTF8Pos(SBOMISS, Tbuff) > 0) then
       begin
+        TBuff := '';  // TBuffをクリアする
         SetActiveWindow(Handle);
         WVWindowParent1.SetFocus;
         WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
