@@ -140,7 +140,9 @@ type
     Cancel,
     Busy,
     WVCreated: boolean;
-    TBuff: string;
+    TBuff,
+    PrevURL,
+    NextURL: string;
     StartTime: TTime;
     FmHt: integer;
     IsCalled: Boolean;
@@ -183,7 +185,6 @@ const
   SCAPTE   = '</div>';
   SEPISB   = '<h2 class=episode-title>';
   SEPISE   = '</h2>';
-  //SBODYB   = '<div class="text " id="novelBoby">';
   SBODYB   = '<div class=text  id=novelBody.*?>';
   SBODYE   = '</div>';
   SERRSTR  = '<div class=dots-indicator';
@@ -200,12 +201,6 @@ const
 
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
-  // 本文の改行タグを削除する
-  function ChangeBRK(Base: string): string;
-  begin
-    Result := UTF8StringReplace(Base, '<br />', '', [rfReplaceAll]);
-    Result := UTF8StringReplace(Result, '<br>', '', [rfReplaceAll]);
-  end;
 
 
 var
@@ -286,6 +281,13 @@ begin
   tmp := UTF8StringReplace(tmp,  '<rt>',          AO_RBL, [rfReplaceAll]);
   tmp := UTF8StringReplace(tmp,  '</rt></ruby>',  AO_RBR, [rfReplaceAll]);
   Result := tmp;
+end;
+
+// 本文の改行タグを削除する
+function ChangeBRK(Base: string): string;
+begin
+  Result := UTF8StringReplace(Base, '<br />', '', [rfReplaceAll]);
+  Result := UTF8StringReplace(Result, '<br>', '', [rfReplaceAll]);
 end;
 
 // 本文の強調タグ(<em><span></span></em>)を青空文庫形式に変換する
@@ -795,6 +797,8 @@ begin
   NvTitle.Caption := '作品タイトル：';
   StartTime := Now;
   Busy := True;
+  PrevURL := '';  // エピソードページを取得出来たか判定するために前後ページのURLを用いる
+  NextURL := '';
 
   // トップページ情報を取得する
   TBuff := LoadFromHTML(URL.Text);
@@ -827,15 +831,21 @@ begin
     Status.Caption := stat;
 
     Done := False;
+    // エピソードページを取得出来たかの判定用に前後ページのURLを保存する
+    if i > 1 then
+      PrevURL := '<a href=' + URL.Text    + ' class=label-circle prev>前の話</a>';
+    if i < cnt then
+      NextURL := '<a href=' + PageList[i] + ' class=label-circle next onclick=nextPageTag();>次の話</a>';
     URL.Text := PageList[i - 1];
     //sttl := TitleList[i - 1];
     sttl := PageList[i - 1];
 
     n := 1;
     TBuff := GetHTMLSrc(URL.Text);
-    // 取得した情報に各話タイトルが存在しない場合は正しい情報を
-    // 取得出来ていないためリトライする
-    While UTF8Pos(sttl, TBuff) = 0 do
+    // 取得した情報に正しい前後ページURLが存在しない場合は
+    // 取得失敗とみなしてリトライする
+    While ((i = 1) and (UTF8Pos(NextURL, TBuff) = 0))
+       or ((i > 1) and (UTF8Pos(PrevURL, TBuff) = 0)) do
     begin
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       // リトライを20回×3セット行っても駄目だった場合はエラーとする
