@@ -146,11 +146,4 @@ object Alphadl: TAlphadl
     Left = 188
     Top = 124
   end
-  object Timer2: TTimer
-    Enabled = False
-    Interval = 300
-    OnTimer = Timer1Timer
-    Left = 140
-    Top = 8
-  end
 end

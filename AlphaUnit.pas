@@ -1,6 +1,9 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  1.8 2025/02/20  Naro2mobiから呼び出すと正常にダウンロード出来ない場合がある不具合を修正した
+  1.71     01/23  SendMessageで送信する文字列の文字コードをUTF-16に変換するようにした
+                  バージョン情報をプロジェクトオプション設定に切り替えた
   1.7 2025/01/11  ページが正しく取得出来たかどうかをページ内の前ページ/次ページURLリンクで判定するようにした
   1.6 2025/01/10  本文中の挿絵処理がおかしかった不具合を修正した
                   ページ取得間違いが出ないように各話タイトル名でチェックしていたのを各話ページURLによる
@@ -109,7 +112,6 @@ type
     Status: TLabel;
     Label1: TLabel;
     OCBtn: TSpeedButton;
-    Timer2: TTimer;
     WVWindowParent1: TWVWindowParent;
     procedure CancelBtnClick(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -456,6 +458,7 @@ procedure ParseChapter(MainPage: string);
 var
   sp, ep: integer;
   ss, ts, title, auther, fn, sendstr, cv: string;
+  ws: WideString;
   conhdl: THandle;
 begin
 
@@ -585,9 +588,12 @@ begin
           begin
             conhdl := GetStdHandle(STD_OUTPUT_HANDLE);
             sendstr := title + ',' + auther;
+            // 送信する文字列をUTF-16にする
+            ws := UTF8ToUTF16(sendstr);
             Cds.dwData := PageList.Count - StartN;
-            Cds.cbData := (UTF8Length(sendstr) + 1) * SizeOf(Char);
-            Cds.lpData := Pointer(sendstr);
+            Cds.cbData := ByteLength(ws) + 2;//(UTF8Length(sendstr) + 1) * SizeOf(Char);
+            Cds.lpData := PWideChar(ws);
+            Application.ProcessMessages;
             SendMessage(hWnd, WM_COPYDATA, conhdl, LPARAM(Addr(Cds)));
           end;
         end;
@@ -875,7 +881,10 @@ begin
       Break;
     end;
     if hWnd <> 0 then
+    begin
+      Application.ProcessMessages;
       SendMessage(hWnd, WM_DLINFO, i, 1);
+    end;
     if Cancel then
       Break;
     Elapsed.Caption := '経過時間：' + FormatDateTime('nn:ss', Now - StartTime);
@@ -914,8 +923,10 @@ end;
 
 procedure TAlphadl.FormActivate(Sender: TObject);
 begin
-  if (URLadr <> '') and (FileName  <> '') then
+  if (URLadr <> '') {and (FileName  <> '')} then
   begin
+    Sleep(1500);
+    Application.ProcessMessages;
     StartBtnClick(nil);
     Close;
   end;

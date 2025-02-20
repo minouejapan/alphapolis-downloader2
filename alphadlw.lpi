@@ -15,6 +15,13 @@
       </XPManifest>
       <Icon Value="0"/>
     </General>
+    <VersionInfo>
+      <MajorVersionNr Value="1"/>
+      <MinorVersionNr Value="7"/>
+      <RevisionNr Value="1"/>
+      <Language Value="0411"/>
+      <StringTable Comments="フリーソフトです" FileDescription="アルファポリス小説ダウンローダー" InternalName="alphadlw.exe" LegalCopyright="INOUE, masahiro" LegalTrademarks="M&amp;I Soft" OriginalFilename="alphadlw.exe" ProductName="アルファポリス小説ダウンローダー" ProductVersion="1.71"/>
+    </VersionInfo>
     <BuildModes>
       <Item Name="Debug" Default="True"/>
       <Item Name="Release">
