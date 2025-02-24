@@ -849,10 +849,12 @@ begin
 
     n := 1;
     TBuff := GetHTMLSrc(URL.Text);
+    // ページ数が1ページ以上ある場合に
     // 取得した情報に正しい前後ページURLが存在しない場合は
     // 取得失敗とみなしてリトライする
-    While ((i = 1) and (UTF8Pos(NextURL, TBuff) = 0))
-       or ((i > 1) and (UTF8Pos(PrevURL, TBuff) = 0)) do
+    While (cnt > 1) and (
+          ((i = 1) and (UTF8Pos(NextURL, TBuff) = 0))
+       or ((i > 1) and (UTF8Pos(PrevURL, TBuff) = 0))) do
     begin
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       // リトライを20回×3セット行っても駄目だった場合はエラーとする
