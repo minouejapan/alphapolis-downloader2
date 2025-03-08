@@ -1,6 +1,7 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.0 2025/03/08  作者名の後ろにゴミが入る場合があった不具合を修正した
   1.9 2025/02/20  １話しかない作品をダウンロード出来なくなっていた不具合を修正した
   1.8 2025/02/20  Naro2mobiから呼び出すと正常にダウンロード出来ない場合がある不具合を修正した
   1.71     01/23  SendMessageで送信する文字列の文字コードをUTF-16に変換するようにした
@@ -510,7 +511,7 @@ begin
           sp := UTF8Pos('">', ts);
           AuthURL := UTF8Copy(ts, 1, sp - 1);
           UTF8Delete(ts, 1, sp + 1);
-          auther := ts;
+          auther := Trim(ts);
           // 作者名を保存
           TextPage.Add(auther);
           TextPage.Add('');
@@ -529,7 +530,7 @@ begin
             if ep > 1 then
             begin
               ts := UTF8Copy(MainPage, 1, ep - 1);
-              ts := ChangeBRK(ts);
+              ts := Trim(ChangeBRK(ts));
               TextPage.Add(AO_KKL);
               TextPage.Add(ts);
               TextPage.Add(AO_KKR);
