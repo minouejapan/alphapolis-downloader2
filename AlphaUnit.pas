@@ -1,6 +1,9 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.1 2025/03/13  保存ファイル名にも連載状況を付加するようにした
+                  最初のファイル名が次のダウンロード時に初期化されない不具合を修正した
+                  各話本文の先頭に半角スペースが入る場合があった不具合を修正した
   2.0 2025/03/08  作者名の後ろにゴミが入る場合があった不具合を修正した
   1.9 2025/02/20  １話しかない作品をダウンロード出来なくなっていた不具合を修正した
   1.8 2025/02/20  Naro2mobiから呼び出すと正常にダウンロード出来ない場合がある不具合を修正した
@@ -335,17 +338,18 @@ function TrimHead(Str: string): string;
 var
   ch: string;
 begin
-  repeat
+  while True do
+  begin
     if UTF8Length(Str) = 0 then
       Break
     else begin
       ch := UTF8Copy(Str, 1, 1);
-      if ch = ' ' then
+      if UTF8Pos(ch, #$0A#$0D' ') > 0 then
         UTF8Delete(Str, 1, 1)
       else
         Break;
     end;
-  until (True);
+  end;
   Result := Str;
 end;
 // 小説本文をHTMLから抜き出して整形する
@@ -477,6 +481,9 @@ begin
         UTF8Delete(ss, 1, 1);
       // タイトル名からファイル名に使用できない文字を除去する
       title := PathFilter(Restore2RealChar(ss));
+      // タイトル名に"完結"が含まれていなければ先頭に小説の連載状況を追加する
+      if UTF8Pos('完結', title) = 0 then
+        title := NvStat + title;
       // 引数に保存するファイル名を指定していなかった場合、タイトル名からファイル名を作成する
       if UTF8Length(Filename) = 0 then
       begin
@@ -488,9 +495,6 @@ begin
 
         Filename := Path + fn + '.txt';
       end;
-      // タイトル名に"完結"が含まれていなければ先頭に小説の連載状況を追加する
-      if UTF8Pos('完結', title) = 0 then
-        title := NvStat + title;
       Alphadl.NvTitle.Caption := '作品タイトル：' + title;
       // タイトル名を保存
       TextPage.Add(title);
@@ -808,6 +812,7 @@ begin
   Busy := True;
   PrevURL := '';  // エピソードページを取得出来たか判定するために前後ページのURLを用いる
   NextURL := '';
+  FileName := '';
 
   // トップページ情報を取得する
   TBuff := LoadFromHTML(URL.Text);
