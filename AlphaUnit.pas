@@ -740,6 +740,7 @@ begin
       FileName := TrimSpace(op);
       if UTF8UpperCase(ExtractFileExt(op)) <> '.TXT' then
         FileName := FileName + '.txt';
+      //MessageDlg('DEBUG', FileName, mtInformation, [mbOK], 0);
     end;
   end;
 end;
@@ -812,7 +813,8 @@ begin
   Busy := True;
   PrevURL := '';  // エピソードページを取得出来たか判定するために前後ページのURLを用いる
   NextURL := '';
-  FileName := '';
+  if ParamCount = 0 then
+    FileName := '';
 
   // トップページ情報を取得する
   TBuff := LoadFromHTML(URL.Text);
@@ -907,6 +909,7 @@ begin
       //MessageDlg(FileName, mtWarning, [mbOK], 0);
       TextPage.WriteBOM := True;
       LogFile.WriteBOM  := True;
+      //MessageDlg('DEBUG', FileName, mtInformation, [mbOK], 0);
       TextPage.SaveToFile(FileName, TEncoding.UTF8);
       LogFile.SaveToFile(ChangeFileExt(Filename, '.log'), TEncoding.UTF8);
     end;
