@@ -1,6 +1,9 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.2 2025/05/06  タイトル名・作者名、あらすじ、見出しタイトルのHTMLエンコード文字を処理していなかっ
+                  た不具合を修正した
+                  処理の都合上本文内の"も削除していたためHTMLソース処理方法を変更した
   2.1 2025/03/13  保存ファイル名にも連載状況を付加するようにした
                   最初のファイル名が次のダウンロード時に初期化されない不具合を修正した
                   各話本文の先頭に半角スペースが入る場合があった不具合を修正した
@@ -189,20 +192,20 @@ const
   SSTTLB   = '<span class="title"><span class="bookmark-dummy"></span>';
   SSTTLE   = '</span>';
 
-  SCAPTB   = '<div class=chapter-title>';
+  SCAPTB   = '<div class="chapter-title">';
   SCAPTE   = '</div>';
-  SEPISB   = '<h2 class=episode-title>';
+  SEPISB   = '<h2 class="episode-title">';
   SEPISE   = '</h2>';
-  SBODYB   = '<div class=text  id=novelBody.*?>';
+  SBODYB   = '<div class="text " id="novelBody".*?>';//'<div class=text  id=novelBody.*?>';
   SBODYE   = '</div>';
-  SERRSTR  = '<div class=dots-indicator';
-  SPICTIN  = '<div class=story-image><a href=.*?><img src=.*? .*?></a></div>';
-  SPICTB   = '<div class=story-image><a href=.*?><img src=';
-  SPICTE   = ' .*?></a></div>';
+  SERRSTR  = '<div class="dots-indicator';//'<div class=dots-indicator';
+  SPICTIN  = '<div class="story-image"><a href=".*?"><img src=".*?" .*?></a></div>';
+  SPICTB   = '<div class="story-image"><a href=".*?"><img src="';
+  SPICTE   = '" .*?></a></div>';
   SCOVERB  = '<div class="cover">';
   SCOVERE  = '" alt=""/>';
   SHEAD    = '<span class="content-status complete">';
-  SBOMISS  = '<div class=dots-indicator id=LoadingEpisode>';
+  SBOMISS  = '<div class="dots-indicator" id="LoadingEpisode">';
 
   CRLF     = #$0D#$0A;
 
@@ -356,7 +359,7 @@ end;
 function ParsePage(Page: string): Boolean;
 var
   sp, ep: integer;
-  capt, subt, body: string;
+  chapt, subt, body: string;
   r: TRegExpr;
 begin
   Result := True;
@@ -376,17 +379,18 @@ begin
     ep := UTF8Pos(SCAPTE, Page);
     if ep > 1 then
     begin
-      capt := UTF8Copy(Page, 1, ep - 1);
-      capt := TrimSpace(capt);
-      capt := Restore2RealChar(capt);
-      if Chapter = capt then
-        capt := ''
+      chapt := UTF8Copy(Page, 1, ep - 1);
+      chapt := TrimSpace(chapt);
+      chapt := ChangeAozoraTag(chapt);
+      chapt := Restore2RealChar(chapt);
+      if Chapter = chapt then
+        chapt := ''
       else
-        Chapter := capt;
+        Chapter := chapt;
       UTF8Delete(Page, 1, UTF8Length(SCAPTE) + ep - 1);
     end;
   end else
-    capt := '';
+    chapt := '';
   // 本文の終わりを</div>で検出するため、同様に</div>で終了する埋め込み画像を
   // 最初に処理しておく(2022/2/2)
   Page := ChangeImage(Page);
@@ -400,6 +404,7 @@ begin
     begin
       subt := UTF8Copy(Page, 1, ep - 1);
       subt := TrimSpace(subt);
+      subt := ChangeAozoraTag(subt);
       subt := Restore2RealChar(subt);
       UTF8Delete(Page, 1, UTF8Length(SEPISB) + ep - 1);
 
@@ -420,8 +425,8 @@ begin
             body := Restore2RealChar(body); // エスケースされた特殊文字を本来の文字に変換する
             body := TrimHead(body);         // 本文先頭の余分なスペースを除去する
 
-            if UTF8Length(capt) > 0 then
-              TextPage.Add(AO_CPB + capt + AO_CPE);
+            if UTF8Length(chapt) > 0 then
+              TextPage.Add(AO_CPB + chapt + AO_CPE);
             TextPage.Add(AO_SEB + subt + AO_SEE);
             TextPage.Add(body);
             TextPage.Add('');
@@ -463,11 +468,10 @@ end;
 procedure ParseChapter(MainPage: string);
 var
   sp, ep: integer;
-  ss, ts, title, auther, fn, sendstr, cv: string;
+  ss, ts, title, fname, auther, fn, sendstr, cv: string;
   ws: WideString;
   conhdl: THandle;
 begin
-
   // タイトル名
   sp := UTF8Pos(STITLEB, MainPage);
   if sp > 0 then
@@ -480,14 +484,21 @@ begin
       while (ss[1] <= ' ') do
         UTF8Delete(ss, 1, 1);
       // タイトル名からファイル名に使用できない文字を除去する
-      title := PathFilter(Restore2RealChar(ss));
+      ss := Trim(ss);
+      ss := ChangeAozoraTag(ss);
+      ss := Restore2Realchar(ss);
+      title := ss;
+      fname := PathFilter(Restore2RealChar(title));
       // タイトル名に"完結"が含まれていなければ先頭に小説の連載状況を追加する
-      if UTF8Pos('完結', title) = 0 then
+      if UTF8Pos('完結', fname) = 0 then
+      begin
+        fname := NvStat + fname;
         title := NvStat + title;
+      end;
       // 引数に保存するファイル名を指定していなかった場合、タイトル名からファイル名を作成する
       if UTF8Length(Filename) = 0 then
       begin
-        fn := title;
+        fn := fname;
         if UTF8Length(fn) > 26 then
           UTF8Delete(fn, 27, UTF8Length(fn) - 26);
         if StartPage <> '' then
@@ -515,7 +526,10 @@ begin
           sp := UTF8Pos('">', ts);
           AuthURL := UTF8Copy(ts, 1, sp - 1);
           UTF8Delete(ts, 1, sp + 1);
-          auther := Trim(ts);
+          ts := Trim(ts);
+          ts := ChangeAozoraTag(ts);
+          ts := Restore2Realchar(ts);
+          auther := ts;
           // 作者名を保存
           TextPage.Add(auther);
           TextPage.Add('');
@@ -535,6 +549,8 @@ begin
             begin
               ts := UTF8Copy(MainPage, 1, ep - 1);
               ts := Trim(ChangeBRK(ts));
+              ts := ChangeAozoraTag(ts);
+              ts := Restore2Realchar(ts);
               TextPage.Add(AO_KKL);
               TextPage.Add(ts);
               TextPage.Add(AO_KKR);
@@ -563,6 +579,8 @@ begin
                 if ep > 1 then
                 begin
                   ss := UTF8Copy(MainPage, 1, ep - 1);
+                  ss := ChangeAozoraTag(ss);
+                  ss := Restore2Realchar(ss);
                   UTF8Delete(MainPage, 1, UTF8Length(SSTTLE) + ep - 1);
                   PageList.Add(ts);
                   TitleList.Add(ss);
@@ -849,9 +867,9 @@ begin
     Done := False;
     // エピソードページを取得出来たかの判定用に前後ページのURLを保存する
     if i > 1 then
-      PrevURL := '<a href=' + URL.Text    + ' class=label-circle prev>前の話</a>';
+      PrevURL := '<a href="' + URL.Text    + '" class="label-circle prev">前の話</a>';
     if i < cnt then
-      NextURL := '<a href=' + PageList[i] + ' class=label-circle next onclick=nextPageTag();>次の話</a>';
+      NextURL := '<a href="' + PageList[i] + '" class="label-circle next" onclick="nextPageTag();">次の話</a>';
     URL.Text := PageList[i - 1];
     //sttl := TitleList[i - 1];
     sttl := PageList[i - 1];
@@ -1035,18 +1053,18 @@ begin
   if aHTML <> '' then
   begin
     src := aHTML;
-    src := UTF8StringReplace(src, '"', '', [rfReplaceAll]);
+    //src := UTF8StringReplace(src, '"', '', [rfReplaceAll]);
     TBuff := src;
 
     if not Done then
     begin
       // 本文部分を取得する(フォーカスが当たっていない場合は本文が空になる)
-      r := TRegExpr.Create('<div class=text  id=novelBody.*?></div>');
+      r := TRegExpr.Create('<div class="text " id="novelBody.*?></div>');
       try
         if r.Exec(TBuff) then
         begin
           body := UTF8Copy(TBuff, r.MatchPos[0], r.MatchLen[0]);
-          body := ReplaceRegExpr('<div class=text  id=novelBody.*?>', body, '');
+          body := ReplaceRegExpr('<div class="text " id="novelBody.*?>', body, '');
           body := ReplaceRegExpr('</div>', body, '');
         end else
           body := '';
