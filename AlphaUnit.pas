@@ -1,6 +1,8 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.3 2025/11/20  表紙画像取得処理の不具合を修正した
+  2.21     07/02  WebView4Delphiを最新版に更新した
   2.2 2025/05/06  タイトル名・作者名、あらすじ、見出しタイトルのHTMLエンコード文字を処理していなかっ
                   た不具合を修正した
                   処理の都合上本文内の"も削除していたためHTMLソース処理方法を変更した
@@ -209,6 +211,8 @@ const
 
   CRLF     = #$0D#$0A;
 
+  UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+
 
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
@@ -241,7 +245,7 @@ var
   TBuff       : TStringList;
 begin
   Result   := '';
-  hSession := InternetOpen('WinINet', INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
+  hSession := InternetOpen(UA, INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
 
   if Assigned(hSession) then
   begin
@@ -471,6 +475,7 @@ var
   ss, ts, title, fname, auther, fn, sendstr, cv: string;
   ws: WideString;
   conhdl: THandle;
+  r: TRegExpr;
 begin
   // タイトル名
   sp := UTF8Pos(STITLEB, MainPage);
@@ -593,20 +598,25 @@ begin
               Break;
           end;
           // 表紙画像をチェック
-          sp := UTF8Pos(SCOVERB, MainPage);
-          if sp > 1 then
-          begin
-            UTF8Delete(MainPage, 1, sp + UTF8Length(SCOVERB));
-            sp := UTF8Pos('<img src="', MainPage);
-            if sp > 0 then
+          r := TRegExpr.Create;
+          try
+            r.InputString := MainPage;
+            r.Expression  := '<div class="cover">.*?</div>';
+            if r.Exec then
             begin
-              UTF8Delete(MainPage, 1, sp + UTF8Length('<img src="') - 1);
-              ep := UTF8Pos('">', MainPage);
-              cv := UTF8Copy(MainPage, 1, ep - 1);
-              if UTF8Pos('alphapolis.co.jp/img/books/no_image/', cv) = 0 then
-                TextPage.Insert(2, AO_CVB + cv + AO_CVE);
-            end;
-          end;
+              r.InputString := r.Match[0];
+              r.Expression  := 'https.*?"';
+              if r.Exec then
+              begin
+                cv := r.Match[0];
+                cv := UTF8StringReplace(cv, '"', '', []);
+                if not ExecRegExpr('https://www.alphapolis.co.jp/img/books/no_image/', cv) then
+                  TextPage.Insert(2, AO_CVB + cv + AO_CVE);
+							end;
+						end;
+					finally
+            r.Free;
+					end;
           // Naro2mobiから呼び出された場合は進捗状況をSendする
           if hWnd <> 0 then
           begin

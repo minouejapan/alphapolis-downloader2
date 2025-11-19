@@ -16,13 +16,13 @@ object Alphadl: TAlphadl
   Font.Pitch = fpVariable
   Font.Quality = fqDraft
   KeyPreview = True
+  LCLVersion = '4.2.0.0'
   OnActivate = FormActivate
   OnClose = FormClose
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnKeyPress = FormKeyPress
   OnShow = FormShow
-  LCLVersion = '3.6.0.0'
   object Panel1: TPanel
     Left = 0
     Height = 2

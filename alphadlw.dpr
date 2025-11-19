@@ -18,7 +18,7 @@ uses
 
 begin
 {$IFDEF FPC}
-  Application.Scaled:=True;
+	Application.Scaled:=True;
 {$ENDIF}
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
