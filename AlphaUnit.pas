@@ -1,6 +1,8 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.4 2025/11/29  ダウンロード出来なくなったため修正した(各話ページの前の話と次の話の構成が変更されたため
+                  取得したページが正しいものか判定出来なくなっていたことに対応した)
   2.3 2025/11/20  表紙画像取得処理の不具合を修正した
   2.21     07/02  WebView4Delphiを最新版に更新した
   2.2 2025/05/06  タイトル名・作者名、あらすじ、見出しタイトルのHTMLエンコード文字を処理していなかっ
@@ -876,12 +878,12 @@ begin
 
     Done := False;
     // エピソードページを取得出来たかの判定用に前後ページのURLを保存する
+    // [ver2.4] URLが相対アドレスになったことと前の話のclass内容が変更されたためPrevURL/NextURLの判別文字列を変更した
     if i > 1 then
-      PrevURL := '<a href="' + URL.Text    + '" class="label-circle prev">前の話</a>';
+      PrevURL := '<a href="' + StringReplace(URL.Text, 'https://www.alphapolis.co.jp', '', [])    + '" class="label-circle prev" onclick="">前の話</a>';
     if i < cnt then
-      NextURL := '<a href="' + PageList[i] + '" class="label-circle next" onclick="nextPageTag();">次の話</a>';
+      NextURL := '<a href="' + StringReplace(PageList[i], 'https://www.alphapolis.co.jp', '', []) + '" class="label-circle next" onclick="nextPageTag();">次の話</a>';
     URL.Text := PageList[i - 1];
-    //sttl := TitleList[i - 1];
     sttl := PageList[i - 1];
 
     n := 1;
