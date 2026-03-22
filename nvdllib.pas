@@ -7,7 +7,8 @@
   このことによって各ダウンローダーのソースコードがコンパクトになった
 
 
-  ver1.0  2024/08/19 初版
+	1.1	 2025/03/03 PathFilterに処理漏れの"<>を追加した
+	1.0  2024/08/19 初版
 
 *)
 
@@ -75,6 +76,9 @@ const
   AO_PIE = '）入る］';        // 画像埋め込み終わり
   AO_CVB = '［＃表紙の図（';  // 表紙画像指定
   AO_CVE = '）入る］';        // 終わり
+  AO_RAB = '［＃右寄せ］';
+  AO_RAE = '［＃右寄せ終わり］';
+  AO_HR  = '［＃水平線］';    // 水平線<hr />
 
 
 implementation
@@ -193,9 +197,10 @@ end;
 // 2)&#x????; → 通常の文字
 function Restore2RealChar(Base: string): string;
 var
-  tmp, cd: string;
-  w: integer;
+  tmp, cd, rcd: string;
+  w, mp, ml: integer;
   ch: Char;
+  wch: WideChar;
   r: TRegExpr;
 begin
   // エスケープされた文字
@@ -216,8 +221,10 @@ begin
     if r.Exec then
     begin
       repeat
-        UTF8Delete(tmp, r.MatchPos[0], r.MatchLen[0]);
         cd := r.Match[0];
+        mp := r.MatchPos[0];
+        ml := r.MatchLen[0];
+        UTF8Delete(tmp, mp, ml);
         UTF8Delete(cd, 1, 2);           // &#を削除する
         UTF8Delete(cd, UTF8Length(cd), 1);  // 最後の;を削除する
         if cd[1] = 'x' then         // 先頭が16進数を表すxであればDelphiの16進数接頭文字$に変更する
@@ -228,7 +235,27 @@ begin
         except
           ch := '?';
         end;
-        UTF8Insert(ch, tmp, r.MatchPos[0]);
+        UTF8Insert(ch, tmp, mp);
+        r.InputString := tmp;
+      until not r.Exec;
+    end;
+    // unicodeエスケープ文字(\uxxxx)
+    r.Expression  := '\\u[0-9A-Fa-f]{4}';
+    r.InputString := tmp;
+    if r.Exec then
+    begin
+      repeat
+        cd := r.Match[0];
+        rcd := '\' + cd;
+        UTF8Delete(cd, 1, 2);   // \uを削除する
+        UTF8Insert('$', cd, 1); // 先頭に16進数接頭文字$を追加する
+        try
+          w := StrToInt(cd);
+          wch := WideChar(w);
+        except
+          wch := '？';
+        end;
+        tmp := ReplaceRegExpr(rcd, tmp, wch);
       until not r.ExecNext;
     end;
   finally
@@ -237,58 +264,28 @@ begin
   Result := tmp;
 end;
 
-// タイトル名をファイル名として使用出来るかどうかチェックし、使用不可文字が
-// あれば修正する('-'に置き換える)
-// フォルダ名の最後が'.'の場合、フォルダ作成時に"."が無視されてフォルダ名が
-// 見つからないことになるため'.'も'-'で置き換える
-// LazarusではUTF8文字列をインデックス(string[])でアクセス出来ないため、
-// UTF8Copy, UTF8Delete, UTF8Insert処理で置き換える
+// タイトル名にファイル名として使用出来ない文字を'-'に置換する
+// Lazarus(FPC)とDelphiで文字コード変換方法が異なるためコンパイル環境で
+// 変換処理を切り替える
+function PathFilter(PassName: string): string;
+var
+  path: string;
+  tmp: WideString;
+begin
+  // ファイル名を一旦ShiftJISに変換して再度Unicode化することでShiftJISで使用
+  // 出来ない文字を除去する
 {$IFDEF FPC}
-function PathFilter(PassName: string): string;
-var
-  i, l: integer;
-  path: string;
-  tmp: AnsiString;
-  ch: string;     // LazarusではCharにUTF-8の文字を代入できないためstringで定義する
-begin
-  // ファイル名を一旦ShiftJISに変換して再度Unicode化することでShiftJISで使用
-  // 出来ない文字を除去する
-  tmp := UTF8ToWinCP(PassName);
-  path := WinCPToUTF8(tmp);      // これでUTF-8依存文字は??に置き換わる
-  l :=  UTF8Length(path);
-  for i := 1 to l do
-  begin
-    ch := UTF8Copy(path, i, 1); // i番目の文字を取り出す
-    if Pos(ch, '\/;:*?"<>|. '+#$09) > 0 then // 文字種が使用不可であれば
-    begin
-      UTF8Delete(path, i, 1);                // 該当文字を削除して
-      UTF8Insert('-', path, i);              // 代わりに'-'を挿入する
-    end;
-  end;
-  Result := path;
-end;
+  tmp  := UTF8ToUTF16(PassName);
+  path := UTF16ToUTF8(tmp);      // これでUTF-8依存文字は??に置き換わる
 {$ELSE}
-function PathFilter(PassName: string): string;
-var
-	i, l: integer;
-  path: string;
-  tmp: AnsiString;
-  ch: char;
-begin
-  // ファイル名を一旦ShiftJISに変換して再度Unicode化することでShiftJISで使用
-  // 出来ない文字を除去する
-  tmp := AnsiString(PassName);
+  tmp  := WideString(PassName);
 	path := string(tmp);
-  l :=  Length(path);
-  for i := 1 to l do
-  begin
-  	ch := Char(path[i]);
-    if Pos(ch, '\/;:*?"<>|. '+#$09) > 0 then
-      path[i] := '-';
-  end;
+{$ENDIF}
+  // ファイル名として使用できない文字を'-'に置換する
+  path := ReplaceRegExpr('[\\/:;\*\?\+,."<>|\.\t ]', path, '-');
+
   Result := path;
 end;
-{$ENDIF}
 
 
 end.

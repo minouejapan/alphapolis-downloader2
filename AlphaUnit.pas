@@ -1,6 +1,9 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.5 2026/03/22  トップページ・各話ページの構成が変更されたため処理を変更した。またこれに合わせて
+                  HMTL解析処理をSHParserに変更した
+                  開発環境をLazarusのみに限定した
   2.4 2025/11/29  ダウンロード出来なくなったため修正した(各話ページの前の話と次の話の構成が変更されたため
                   取得したページが正しいものか判定出来なくなっていたことに対応した)
   2.3 2025/11/20  表紙画像取得処理の不具合を修正した
@@ -88,24 +91,16 @@
 *)
 unit alphaunit;
 
-{$IFDEF FPC}
-  {$MODE Delphi}
-  {$CODETYPE utf8}
-{$ENDIF}
+{$MODE Delphi}
+{$CODETYPE utf8}
 
 interface
 
 uses
-{$IFDEF FPC}
-  Windows, Messages, SysUtils, Classes, Graphics,
-  Controls, Forms, Dialogs, ExtCtrls, StdCtrls, Buttons, LazUTF8,
-{$ELSE}
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Buttons,
-  Lazutf8wrap,
-{$ENDIF}
-  WinINet, RegExpr,
-  uWVBrowserBase, uWVBrowser,uWVWindowParent, uWVTypes, uWVTypeLibrary, uWVLoader, uWVWinControl;
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms,
+  Dialogs, ExtCtrls, StdCtrls, Buttons, LazUTF8, RegExpr, SHParser,
+  uWVBrowserBase, uWVBrowser,uWVWindowParent, uWVTypes, uWVTypeLibrary,
+  uWVLoader, uWVWinControl;
 
 type
 
@@ -161,7 +156,8 @@ type
     StartTime: TTime;
     FmHt: integer;
     IsCalled: Boolean;
-    function GetHTMLSrc(aURL: string): string;
+    TopPage: Boolean;
+    function GetHTMLSrc(aURL: string; IsTopPage: Boolean): string;
   public
 
   end;
@@ -171,11 +167,7 @@ var
 
 implementation
 
-{$IFDEF FPC}
-  {$R *.lfm}
-{$ELSE}
-  {$R *.dfm}
-{$ENDIF}
+{$R *.lfm}
 {$R verinfo.res}
 
 { TAlphadl }
@@ -185,35 +177,14 @@ uses
 
 const
   // データ抽出用の識別タグ
-  STITLEB  = '<h1 class="title">';     // 小説表題
-  STITLEE  = '</h1>';
-  SAUTHERB = '<div class="author">';   // 作者
-  SAUTHERE = '</a>';
-  SHEADERB = '<div class="abstract">'; // 前書き
-  SHEADERE = '</div>';
-  SSTRURLB = '<div class="episode ">    <a href="';
-  SSTRURLE = '" >';
-  SSTTLB   = '<span class="title"><span class="bookmark-dummy"></span>';
-  SSTTLE   = '</span>';
-
-  SCAPTB   = '<div class="chapter-title">';
-  SCAPTE   = '</div>';
-  SEPISB   = '<h2 class="episode-title">';
-  SEPISE   = '</h2>';
-  SBODYB   = '<div class="text " id="novelBody".*?>';//'<div class=text  id=novelBody.*?>';
-  SBODYE   = '</div>';
   SERRSTR  = '<div class="dots-indicator';//'<div class=dots-indicator';
   SPICTIN  = '<div class="story-image"><a href=".*?"><img src=".*?" .*?></a></div>';
   SPICTB   = '<div class="story-image"><a href=".*?"><img src="';
   SPICTE   = '" .*?></a></div>';
-  SCOVERB  = '<div class="cover">';
-  SCOVERE  = '" alt=""/>';
   SHEAD    = '<span class="content-status complete">';
   SBOMISS  = '<div class="dots-indicator" id="LoadingEpisode">';
 
   CRLF     = #$0D#$0A;
-
-  UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
 
 // ユーザメッセージID
@@ -226,68 +197,15 @@ var
   TitleList,
   LogFile: TStringList;
   URLadr, Path,
-  Chapter,
   NvStat,
   AuthURL,
+  Chapter,
   FileName,
   StartPage: string;
   hWnd: THandle;
   CDS: TCopyDataStruct;
   StartN: integer;
 
-// WinINetを用いたHTMLファイルのダウンロード
-function LoadFromHTML(URLadr: string): string;
-var
-  hSession    : HINTERNET;
-  hService    : HINTERNET;
-  dwBytesRead : DWORD;
-  dwFlag      : DWORD;
-  lpBuffer    : PChar;
-  RBuff       : TMemoryStream;
-  TBuff       : TStringList;
-begin
-  Result   := '';
-  hSession := InternetOpen(UA, INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
-
-  if Assigned(hSession) then
-  begin
-    dwFlag   := INTERNET_FLAG_RELOAD;
-    hService := InternetOpenUrl(hSession, PChar(URLadr), nil, 0, dwFlag, 0);
-    if Assigned(hService ) then
-    begin
-      RBuff := TMemoryStream.Create;
-      try
-        lpBuffer := AllocMem(65536);
-        try
-          dwBytesRead := 65535;
-          while True do
-          begin
-            if InternetReadFile(hService, lpBuffer, 65535,{SizeOf(lpBuffer),}dwBytesRead) then
-            begin
-              if dwBytesRead = 0 then
-                break;
-              RBuff.WriteBuffer(lpBuffer^, dwBytesRead);
-            end else
-              break;
-          end;
-        finally
-          FreeMem(lpBuffer);
-        end;
-        TBuff := TStringList.Create;
-        try
-          RBuff.Position := 0;
-          TBuff.LoadFromStream(RBuff, TEncoding.UTF8);
-          Result := TBuff.Text;
-        finally
-          TBuff.Free;
-        end;
-      finally
-        RBuff.Free;
-      end;
-    end;
-    InternetCloseHandle(hService);
-  end;
-end;
 
 // 本文のルビタグを青空文庫形式に変換する
 function ChangeRuby(Base: string): string;
@@ -300,11 +218,11 @@ begin
   Result := tmp;
 end;
 
-// 本文の改行タグを削除する
+// 本文の改行タグをCR/LFに置換する
 function ChangeBRK(Base: string): string;
 begin
-  Result := UTF8StringReplace(Base, '<br />', '', [rfReplaceAll]);
-  Result := UTF8StringReplace(Result, '<br>', '', [rfReplaceAll]);
+  Result := UTF8StringReplace(Base, '<br />', #13#10, [rfReplaceAll]);
+  Result := UTF8StringReplace(Result, '<br>', #13#10, [rfReplaceAll]);
 end;
 
 // 本文の強調タグ(<em><span></span></em>)を青空文庫形式に変換する
@@ -361,12 +279,27 @@ begin
   end;
   Result := Str;
 end;
+
+// HTMLタグの処理
+function GetText(Source: string): string;
+var
+  tmp: string;
+begin
+  tmp := ChangeBRK(Source);     // </ br>をCRLFに変換する
+  tmp := ChangeRuby(tmp);       // ルビのタグを変換する
+  tmp := ChangeEm(tmp);         // 強調（傍点）タグを変換する
+  tmp := Restore2RealChar(tmp); // エスケースされた特殊文字を本来の文字に変換する
+  tmp := TrimHead(tmp);         // 本文先頭の余分なスペースを除去する
+  tmp := UTF8StringReplace(tmp, ' ', '', [rfReplaceAll]);  // 本文中の半角スペースを削除
+  Result := tmp;
+end;
+
 // 小説本文をHTMLから抜き出して整形する
 function ParsePage(Page: string): Boolean;
 var
-  sp, ep: integer;
+  sp: integer;
   chapt, subt, body: string;
-  r: TRegExpr;
+  shp: TSHParser;
 begin
   Result := True;
 
@@ -374,271 +307,166 @@ begin
   if sp > 0 then
   begin
     Result := False;
+    Exit;
   end;
+	Page  := ChangeAozoraTag(Page);  // 最初に青空文庫のルビタグ文字｜《》を変換する
+  Page  := ChangeImage(Page);
 
-  Page := ChangeAozoraTag(Page);  // 最初に青空文庫のルビタグ文字｜《》を変換する
-
-  sp := UTF8Pos(SCAPTB, Page);
-  if sp > 1 then
-  begin
-    UTF8Delete(Page, 1, UTF8Length(SCAPTB) + sp - 1);
-    ep := UTF8Pos(SCAPTE, Page);
-    if ep > 1 then
+  shp := TSHParser.Create(Page);
+  try
+    chapt := shp.FindRegex('<div class="chapter-title">', '</div>', False);
+    chapt := Trim(chapt);
+    chapt := Restore2RealChar(chapt);
+    if Chapter = chapt then
+      chapt := ''
+    else
+      Chapter := chapt;
+    subt  := shp.FindRegex('<h2 class="episode-title">', '</h2>', False);
+    subt  := Trim(subt);
+    subt  := Restore2RealChar(subt);
+    body  := shp.FindRegex('<div class="text " id="novelBody".*?>', '</div>', False);
+    body  := GetText(body); // HTMLタグの処理
+    if chapt <> '' then
+      TextPage.Add(AO_CPB + chapt + AO_CPE);
+    if (subt <> '') and (body <> '') then
     begin
-      chapt := UTF8Copy(Page, 1, ep - 1);
-      chapt := TrimSpace(chapt);
-      chapt := ChangeAozoraTag(chapt);
-      chapt := Restore2RealChar(chapt);
-      if Chapter = chapt then
-        chapt := ''
-      else
-        Chapter := chapt;
-      UTF8Delete(Page, 1, UTF8Length(SCAPTE) + ep - 1);
+      TextPage.Add(AO_SEB + subt + AO_SEE);
+      TextPage.Add(body);
+      TextPage.Add('');
+      TextPage.Add(AO_PB2);
+      TextPage.Add('');
+    end else begin
+      TextPage.Add('本文を取得出来ませんでした.');
+      TextPage.Add(AO_PB2);
     end;
-  end else
-    chapt := '';
-  // 本文の終わりを</div>で検出するため、同様に</div>で終了する埋め込み画像を
-  // 最初に処理しておく(2022/2/2)
-  Page := ChangeImage(Page);
-
-  sp := UTF8Pos(SEPISB, Page);
-  if sp > 1 then
-  begin
-    UTF8Delete(Page, 1, UTF8Length(SEPISB) + sp - 1);
-    ep := UTF8Pos(SEPISE, Page);
-    if ep > 1 then
-    begin
-      subt := UTF8Copy(Page, 1, ep - 1);
-      subt := TrimSpace(subt);
-      subt := ChangeAozoraTag(subt);
-      subt := Restore2RealChar(subt);
-      UTF8Delete(Page, 1, UTF8Length(SEPISB) + ep - 1);
-
-      r := TRegExpr.Create;
-      try
-        r.Expression  := SBODYB;
-        r.InputString := Page;
-        if r.Exec then
-        begin
-          UTF8Delete(Page, 1, r.MatchPos[0] + r.MatchLen[0] - 1);
-          ep := UTF8Pos(SBODYE, Page);
-          if ep > 1 then
-          begin
-            body := UTF8Copy(Page, 1, ep - 1);
-            body := ChangeBRK(body);        // </ br>をCRLFに変換する
-            body := ChangeRuby(body);       // ルビのタグを変換する
-            body := ChangeEm(body);         // 強調（傍点）タグを変換する
-            body := Restore2RealChar(body); // エスケースされた特殊文字を本来の文字に変換する
-            body := TrimHead(body);         // 本文先頭の余分なスペースを除去する
-
-            if UTF8Length(chapt) > 0 then
-              TextPage.Add(AO_CPB + chapt + AO_CPE);
-            TextPage.Add(AO_SEB + subt + AO_SEE);
-            TextPage.Add(body);
-            TextPage.Add('');
-            TextPage.Add(AO_PB2);
-            TextPage.Add('');
-          end;
-        end;
-      finally
-        r.Free;
-      end;
-    end;
-    Result := True;
-  end else begin
-    TextPage.Add('本文を取得出来ませんでした.');
-    TextPage.Add(AO_PB2);
-  end;
+	finally
+    shp.Free;
+	end;
 end;
 
 // 小説の連載状況をチェックする
 function GetNovelStatus(MainPage: string): string;
 var
-  str: string;
-  p: integer;
+  stat: string;
+  shp: TSHParser;
 begin
   Result := '';
-  p := UTF8Pos(SHEAD, MainPage);
-  if p > 0 then
-  begin
-    str := UTF8Copy(MainPage, p + UTF8Length(SHEAD), 12);
-    if UTF8Pos('連載中', str) > 0 then
+  shp := TSHParser.Create(MainPage);
+  try
+    stat := shp.Find('span', 'class', 'content-status complete');
+    if UTF8Pos('連載中', stat) > 0 then
       Result := '【連載中】'
-    else if UTF8Pos('完結', str) > 0 then
+    else if UTF8Pos('完結', stat) > 0 then
       Result := '【完結】';
-  end;
+	finally
+    shp.Free;
+	end;
 end;
 
+// 正規表現による検索・切り出し
+function FindRegex(Source, PatternL, PatternR: string): string;
+var
+  r: TRegExpr;
+  s: string;
+begin
+  Result := '';
+  r := TRegExpr.Create;
+  try
+    r.InputString := Source;
+    r.Expression  := PatternL + '[\s\S]*?' + PatternR;
+    if r.Exec then
+    begin
+      s := r.Match[0];
+      s := ReplaceRegExpr(PatternR, ReplaceRegExpr(PatternL, s, ''), '');
+      Result := s;
+		end;
+	finally
+    r.Free;
+	end;
+end;
 
-// トップページからタイトル、作者、前書き、各話情報を取り出す
+ // トップページからタイトル、作者、前書き、各話情報を取り出す
 procedure ParseChapter(MainPage: string);
 var
-  sp, ep: integer;
-  ss, ts, title, fname, auther, fn, sendstr, cv: string;
+  i: integer;
+  ss, ts, title, fname, author, abstrct, fn, sendstr, cv: string;
   ws: WideString;
   conhdl: THandle;
+  shp: TSHParser;
   r: TRegExpr;
+  epurl: TStringList;
 begin
-  // タイトル名
-  sp := UTF8Pos(STITLEB, MainPage);
-  if sp > 0 then
-  begin
-    UTF8Delete(MainPage, 1, sp + UTF8Length(STITLEB) - 1);
-    sp := UTF8Pos(STITLEE, MainPage);
-    if sp > 1 then
+  shp := TSHParser.Create(MainPage);
+  r   := TRegExpr.Create;
+  try
+    // 表紙画像
+    cv      := shp.Find('div', 'class', 'cover', False);
+    cv      := FindRegex(cv, '<img src="', '"');
+    title   := GetText(shp.Find('h1', 'class', 'title', False));
+    // 作者・作者URL
+    ss      := shp.Find('div', 'class', 'author', False);
+    author  := GetText(FindRegex(ss, '<a href=.*?>', '</a>'));
+    AuthURL := FindRegex(ss, '<a href="', '">');
+    // あらすじ
+    abstrct := GetText(shp.Find('div', 'class', 'abstract', False));
+    // 各話ページURL
+    epurl   := shp.FindAll('div', 'class', 'episode', False);
+    for i := 0 to epurl.Count - 1 do
     begin
-      ss := UTF8Copy(MainPage, 1, sp - 1);
-      while (ss[1] <= ' ') do
-        UTF8Delete(ss, 1, 1);
-      // タイトル名からファイル名に使用できない文字を除去する
-      ss := Trim(ss);
-      ss := ChangeAozoraTag(ss);
-      ss := Restore2Realchar(ss);
-      title := ss;
-      fname := PathFilter(Restore2RealChar(title));
-      // タイトル名に"完結"が含まれていなければ先頭に小説の連載状況を追加する
-      if UTF8Pos('完結', fname) = 0 then
-      begin
-        fname := NvStat + fname;
-        title := NvStat + title;
-      end;
-      // 引数に保存するファイル名を指定していなかった場合、タイトル名からファイル名を作成する
-      if UTF8Length(Filename) = 0 then
-      begin
-        fn := fname;
-        if UTF8Length(fn) > 26 then
-          UTF8Delete(fn, 27, UTF8Length(fn) - 26);
-        if StartPage <> '' then
-          fn := fn + '(' + StartPage + ')';
-
-        Filename := Path + fn + '.txt';
-      end;
-      Alphadl.NvTitle.Caption := '作品タイトル：' + title;
-      // タイトル名を保存
-      TextPage.Add(title);
-      LogFile.Add('タイトル：' + title);
-      UTF8Delete(MainPage, 1, sp + UTF8Length(STITLEE));
-      // 作者名
-      AuthURL := '';
-      sp := UTF8Pos(SAUTHERB, MainPage);
-      if sp > 1  then
-      begin
-        UTF8Delete(MainPage, 1, sp + UTF8Length(SAUTHERB) - 1);
-        ep := UTF8Pos(SAUTHERE, MainPage);
-        if ep > 1 then
-        begin
-          ts := UTF8Copy(MainPage, 1, ep - 1);
-          sp := UTF8Pos('<a href="', ts);
-          UTF8Delete(ts, 1, sp + UTF8Length('<a href="') - 1);
-          sp := UTF8Pos('">', ts);
-          AuthURL := UTF8Copy(ts, 1, sp - 1);
-          UTF8Delete(ts, 1, sp + 1);
-          ts := Trim(ts);
-          ts := ChangeAozoraTag(ts);
-          ts := Restore2Realchar(ts);
-          auther := ts;
-          // 作者名を保存
-          TextPage.Add(auther);
-          TextPage.Add('');
-          TextPage.Add(AO_PB2);
-          TextPage.Add('');
-          LogFile.Add('作者　　：' + auther);
-          if AuthURL <> '' then
-            LogFile.Add('作者URL : ' + AuthURL);
-          UTF8Delete(MainPage, 1, ep + UTF8Length(SAUTHERE));
-          // 前書き（あらすじ）
-          sp := UTF8Pos(SHEADERB, MainPage);
-          if sp > 1 then
-          begin
-            UTF8Delete(MainPage, 1, sp + UTF8Length(SHEADERB) - 1);
-            ep := UTF8Pos(SHEADERE, MainPage);
-            if ep > 1 then
-            begin
-              ts := UTF8Copy(MainPage, 1, ep - 1);
-              ts := Trim(ChangeBRK(ts));
-              ts := ChangeAozoraTag(ts);
-              ts := Restore2Realchar(ts);
-              TextPage.Add(AO_KKL);
-              TextPage.Add(ts);
-              TextPage.Add(AO_KKR);
-              TextPage.Add(AO_PB2);
-              LogFile.Add('あらすじ：');
-              LogFile.Add(ts);
-            end;
-          end;
-          // 各ページ情報を取得
-          // #$0D#$0Aを削除する
-          MainPage := ElimCRLF(MainPage);
-          sp := UTF8Pos(SSTRURLB, MainPage);
-          while sp > 1 do
-          begin
-            UTF8Delete(MainPage, 1, sp + UTF8Length(SSTRURLB) - 1);
-            ep := UTF8Pos(SSTRURLE, MainPage);
-            if ep > 1 then
-            begin
-              ts := UTF8Copy(MainPage, 1, ep - 1);
-              UTF8Delete(MainPage, 1, ep + UTF8Length(SSTRURLE) - 1);
-              sp := UTF8Pos(SSTTLB, MainPage);
-              if sp > 1 then
-              begin
-                UTF8Delete(MainPage, 1, UTF8Length(SSTTLB) + sp - 1);
-                ep := UTF8Pos(SSTTLE, MainPage);
-                if ep > 1 then
-                begin
-                  ss := UTF8Copy(MainPage, 1, ep - 1);
-                  ss := ChangeAozoraTag(ss);
-                  ss := Restore2Realchar(ss);
-                  UTF8Delete(MainPage, 1, UTF8Length(SSTTLE) + ep - 1);
-                  PageList.Add(ts);
-                  TitleList.Add(ss);
-                  sp := UTF8Pos(SSTRURLB, MainPage);
-                end else
-                  Break;
-              end else
-                Break;
-            end else
-              Break;
-          end;
-          // 表紙画像をチェック
-          r := TRegExpr.Create;
-          try
-            r.InputString := MainPage;
-            r.Expression  := '<div class="cover">.*?</div>';
-            if r.Exec then
-            begin
-              r.InputString := r.Match[0];
-              r.Expression  := 'https.*?"';
-              if r.Exec then
-              begin
-                cv := r.Match[0];
-                cv := UTF8StringReplace(cv, '"', '', []);
-                if not ExecRegExpr('https://www.alphapolis.co.jp/img/books/no_image/', cv) then
-                  TextPage.Insert(2, AO_CVB + cv + AO_CVE);
-							end;
-						end;
-					finally
-            r.Free;
-					end;
-          // Naro2mobiから呼び出された場合は進捗状況をSendする
-          if hWnd <> 0 then
-          begin
-            conhdl := GetStdHandle(STD_OUTPUT_HANDLE);
-            sendstr := title + ',' + auther;
-            // 送信する文字列をUTF-16にする
-            ws := UTF8ToUTF16(sendstr);
-            Cds.dwData := PageList.Count - StartN;
-            Cds.cbData := ByteLength(ws) + 2;//(UTF8Length(sendstr) + 1) * SizeOf(Char);
-            Cds.lpData := PWideChar(ws);
-            Application.ProcessMessages;
-            SendMessage(hWnd, WM_COPYDATA, conhdl, LPARAM(Addr(Cds)));
-          end;
-        end;
-      end;
+      ss := FindRegex(epurl[i], '<a href="', '">');
+      PageList.Add(ss);
+		end;
+    // 保存ファイル名
+    if UTF8Pos('完結', title) = 0 then
+      title := NvStat + title;
+    if Filename = '' then
+    begin
+      fn := PathFilter(Restore2RealChar(title));
+      if UTF8Length(fn) > 26 then
+        UTF8Delete(fn, 27, UTF8Length(fn) - 26);
+      if StartPage <> '' then
+        fn := fn + '(' + StartPage + ')';
+      Filename := Path + fn + '.txt';
     end;
-  end;
+    Alphadl.NvTitle.Caption := '作品タイトル：' + title;
+    // タイトル名を保存
+    TextPage.Add(title);
+    // 作者名を保存
+    TextPage.Add(author);
+    // 表紙画像
+    if not ExecRegExpr('https://www.alphapolis.co.jp/img/books/no_image/', cv) then
+      TextPage.Add(AO_CVB + cv + AO_CVE);
+    TextPage.Add('');
+    TextPage.Add(AO_PB2);
+    TextPage.Add('');
+    LogFile.Add('作者  ：' + author);
+    if AuthURL <> '' then
+      LogFile.Add('作者URL : ' + AuthURL);
+    TextPage.Add(AO_KKL);
+    TextPage.Add(abstrct);
+    TextPage.Add(AO_KKR);
+    TextPage.Add(AO_PB2);
+    LogFile.Add('あらすじ：');
+    LogFile.Add(abstrct);
+    // Naro2mobiから呼び出された場合は進捗状況をSendする
+    if hWnd <> 0 then
+    begin
+      sendstr := title + ',' + author;
+      // 送信する文字列をUTF-16にする
+      ws := UTF8ToUTF16(sendstr);
+      Cds.dwData := PageList.Count - StartN + 1;
+      Cds.cbData := ByteLength(ws) + 2;
+      Cds.lpData := PWideChar(ws);
+      SendMessage(hWnd, WM_COPYDATA, Application.Handle, LPARAM(Addr(Cds)));
+      Application.ProcessMessages;
+    end;
+	finally
+    shp.Free;
+    r.Free;
+	end;
 end;
 
-function TAlphadl.GetHTMLSrc(aURL:string): string;
+function TAlphadl.GetHTMLSrc(aURL:string; IsTopPage: Boolean): string;
 var
   cnt: integer;
   tout: boolean;
@@ -646,6 +474,7 @@ begin
   Result := '';
   Done := False;
   tout := False;
+  TopPage := IsTopPage;
 
   SetActiveWindow(Handle);
   // 各話本文を表示させるためにWebページにフォーカスを当てる
@@ -821,7 +650,7 @@ end;
 procedure TAlphadl.StartBtnClick(Sender: TObject);
 var
   i, cnt, j, sc, ct, n: integer;
-  sttl, stat: string;
+  stat: string;
 label
   Quit;
 begin
@@ -847,7 +676,8 @@ begin
     FileName := '';
 
   // トップページ情報を取得する
-  TBuff := LoadFromHTML(URL.Text);
+  //TBuff := LoadFromHTML(URL.Text);
+  TBuff := GetHTMLSrc(URL.Text, True);
   if TBuff <> '' then
   begin
     NvStat := GetNovelStatus(TBuff);
@@ -880,20 +710,19 @@ begin
     // エピソードページを取得出来たかの判定用に前後ページのURLを保存する
     // [ver2.4] URLが相対アドレスになったことと前の話のclass内容が変更されたためPrevURL/NextURLの判別文字列を変更した
     if i > 1 then
-      PrevURL := '<a href="' + StringReplace(URL.Text, 'https://www.alphapolis.co.jp', '', [])    + '" class="label-circle prev" onclick="">前の話</a>';
+      PrevURL := '<a href="' + StringReplace(URL.Text, 'https://www.alphapolis.co.jp', '', [])    + '.*?>前の話';
     if i < cnt then
-      NextURL := '<a href="' + StringReplace(PageList[i], 'https://www.alphapolis.co.jp', '', []) + '" class="label-circle next" onclick="nextPageTag();">次の話</a>';
-    URL.Text := PageList[i - 1];
-    sttl := PageList[i - 1];
+      NextURL := '<a href="' + PageList[i] + '.*?>次の話';
+    URL.Text := 'https://www.alphapolis.co.jp' + PageList[i - 1];
 
     n := 1;
-    TBuff := GetHTMLSrc(URL.Text);
+    TBuff := GetHTMLSrc(URL.Text, False);
     // ページ数が1ページ以上ある場合に
     // 取得した情報に正しい前後ページURLが存在しない場合は
     // 取得失敗とみなしてリトライする
     While (cnt > 1) and (
-          ((i = 1) and (UTF8Pos(NextURL, TBuff) = 0))
-       or ((i > 1) and (UTF8Pos(PrevURL, TBuff) = 0))) do
+          ((i = 1) and not ExecRegExpr(NextURL, TBuff))
+       or ((i > 1) and not ExecRegExpr(PrevURL, TBuff))) do
     begin
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       // リトライを20回×3セット行っても駄目だった場合はエラーとする
@@ -914,7 +743,7 @@ begin
         Break;
       Inc(n);
       Sleep(500);
-      TBuff := GetHTMLSrc(URL.Text);
+      TBuff := GetHTMLSrc(URL.Text, False);
     end;
     if not ParsePage(TBuff) then
     begin
@@ -1070,31 +899,51 @@ begin
 
     if not Done then
     begin
-      // 本文部分を取得する(フォーカスが当たっていない場合は本文が空になる)
-      r := TRegExpr.Create('<div class="text " id="novelBody.*?></div>');
-      try
-        if r.Exec(TBuff) then
-        begin
-          body := UTF8Copy(TBuff, r.MatchPos[0], r.MatchLen[0]);
-          body := ReplaceRegExpr('<div class="text " id="novelBody.*?>', body, '');
-          body := ReplaceRegExpr('</div>', body, '');
-        end else
-          body := '';
-      finally
-        r.Free;
-      end;
-      // 本文がない、もしくSBOMISSが含まれていれば、Webページからフォーカスが
-      // 外れて本文が非表示になっている状態なのでwebページにフォーカスを当てて
-      // 再度HTMLソース取得を試みる
-      if (UTF8Length(body) < 5) or (UTF8Pos(SBOMISS, Tbuff) > 0) then
+      if TopPage then
       begin
-        TBuff := '';  // TBuffをクリアする
-        SetActiveWindow(Handle);
-        WVWindowParent1.SetFocus;
-        WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
-      end else
-        Done := True;
-    end;
+        if Pos('{"content":{"id"', src) > 1 then
+          Done := True
+        else begin
+          SetActiveWindow(Handle);
+          WVWindowParent1.SetFocus;
+          WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
+				end;
+      end else begin
+        // 本文部分を取得する(フォーカスが当たっていない場合は本文が空になる)
+        if Pos('<div class="text " id="novelBody"', src) > 1 then
+          Done := True
+        else begin
+          SetActiveWindow(Handle);
+          WVWindowParent1.SetFocus;
+          WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
+				end;
+(*
+        r := TRegExpr.Create('<div class="text " id="novelBody.*?></div>');
+        try
+          if r.Exec(TBuff) then
+          begin
+            body := UTF8Copy(TBuff, r.MatchPos[0], r.MatchLen[0]);
+            body := ReplaceRegExpr('<div class="text " id="novelBody.*?>', body, '');
+            body := ReplaceRegExpr('</div>', body, '');
+          end else
+            body := '';
+        finally
+          r.Free;
+        end;
+*)
+        // 本文がない、もしくSBOMISSが含まれていれば、Webページからフォーカスが
+        // 外れて本文が非表示になっている状態なのでwebページにフォーカスを当てて
+        // 再度HTMLソース取得を試みる
+        if UTF8Pos(SBOMISS, Tbuff) > 0 then
+        begin
+          TBuff := '';  // TBuffをクリアする
+          SetActiveWindow(Handle);
+          WVWindowParent1.SetFocus;
+          WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
+        end else
+          Done := True;
+			end;
+		end;
   end else begin
     SetActiveWindow(Handle);
     WVWindowParent1.SetFocus;
