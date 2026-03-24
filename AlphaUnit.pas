@@ -1,6 +1,9 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.51 2026/03/24 各話ページの取得に失敗する場合があるためブラウザコントロールへの強制フォーカスの
+                  当て方を変更した
+                  また各話ページの取得に失敗した場合のリトライを強化した
   2.5 2026/03/22  トップページ・各話ページの構成が変更されたため処理を変更した。またこれに合わせて
                   HMTL解析処理をSHParserに変更した
                   開発環境をLazarusのみに限定した
@@ -155,7 +158,7 @@ type
     NextURL: string;
     StartTime: TTime;
     FmHt: integer;
-    IsCalled: Boolean;
+    IsCalled,
     TopPage: Boolean;
     function GetHTMLSrc(aURL: string; IsTopPage: Boolean): string;
   public
@@ -205,6 +208,7 @@ var
   hWnd: THandle;
   CDS: TCopyDataStruct;
   StartN: integer;
+  IsErr: Boolean;
 
 
 // 本文のルビタグを青空文庫形式に変換する
@@ -328,7 +332,7 @@ begin
     body  := GetText(body); // HTMLタグの処理
     if chapt <> '' then
       TextPage.Add(AO_CPB + chapt + AO_CPE);
-    if (subt <> '') and (body <> '') then
+    if (subt <> '') and (body <> '') and (Pos('<divclass="dots-indicator"id="LoadingEpisode">', body) = 0) then
     begin
       TextPage.Add(AO_SEB + subt + AO_SEE);
       TextPage.Add(body);
@@ -336,8 +340,9 @@ begin
       TextPage.Add(AO_PB2);
       TextPage.Add('');
     end else begin
-      TextPage.Add('本文を取得出来ませんでした.');
-      TextPage.Add(AO_PB2);
+      Result := False;
+      //TextPage.Add('本文を取得出来ませんでした.');
+      //TextPage.Add(AO_PB2);
     end;
 	finally
     shp.Free;
@@ -439,7 +444,8 @@ begin
     TextPage.Add('');
     TextPage.Add(AO_PB2);
     TextPage.Add('');
-    LogFile.Add('作者  ：' + author);
+    LogFile.Add('タイトル：' + title);
+    LogFile.Add('作者　　：' + author);
     if AuthURL <> '' then
       LogFile.Add('作者URL : ' + AuthURL);
     TextPage.Add(AO_KKL);
@@ -448,6 +454,8 @@ begin
     TextPage.Add(AO_PB2);
     LogFile.Add('あらすじ：');
     LogFile.Add(abstrct);
+    if IsErr then
+      LogFile.Add(#13#10'エラー：取得出来ないページがありました.');
     // Naro2mobiから呼び出された場合は進捗状況をSendする
     if hWnd <> 0 then
     begin
@@ -599,7 +607,7 @@ begin
       FileName := TrimSpace(op);
       if UTF8UpperCase(ExtractFileExt(op)) <> '.TXT' then
         FileName := FileName + '.txt';
-      //MessageDlg('DEBUG', FileName, mtInformation, [mbOK], 0);
+      LogFile.Add(URL.Text);
     end;
   end;
 end;
@@ -649,10 +657,10 @@ end;
 
 procedure TAlphadl.StartBtnClick(Sender: TObject);
 var
-  i, cnt, j, sc, ct, n: integer;
+  i, cnt, j, sc, ct, n, rn: integer;
   stat: string;
 label
-  Quit;
+  Retry, Quit;
 begin
   if UTF8Pos('https://www.alphapolis.co.jp/novel/', URL.Text) = 0 then
   begin
@@ -669,6 +677,7 @@ begin
   TitleList.Clear;
   NvTitle.Caption := '作品タイトル：';
   StartTime := Now;
+  IsErr := False;
   Busy := True;
   PrevURL := '';  // エピソードページを取得出来たか判定するために前後ページのURLを用いる
   NextURL := '';
@@ -714,7 +723,8 @@ begin
     if i < cnt then
       NextURL := '<a href="' + PageList[i] + '.*?>次の話';
     URL.Text := 'https://www.alphapolis.co.jp' + PageList[i - 1];
-
+    rn := 0;
+Retry:
     n := 1;
     TBuff := GetHTMLSrc(URL.Text, False);
     // ページ数が1ページ以上ある場合に
@@ -747,8 +757,14 @@ begin
     end;
     if not ParsePage(TBuff) then
     begin
-      TextPage.Add('★エラー：ページ情報を取得出来ない');
-      Break;
+      Inc(rn);
+      if rn < 3 then
+        Goto Retry
+      else begin
+        TextPage.Add('★エラー：ページ情報を取得出来ない');
+        IsErr := True;
+        Break;
+      end;
     end;
     if hWnd <> 0 then
     begin
@@ -765,10 +781,8 @@ begin
     Status.Caption := stat + '・・完了';
     if FileName <> '' then
     begin
-      //MessageDlg(FileName, mtWarning, [mbOK], 0);
       TextPage.WriteBOM := True;
       LogFile.WriteBOM  := True;
-      //MessageDlg('DEBUG', FileName, mtInformation, [mbOK], 0);
       TextPage.SaveToFile(FileName, TEncoding.UTF8);
       LogFile.SaveToFile(ChangeFileExt(Filename, '.log'), TEncoding.UTF8);
     end;
@@ -904,8 +918,9 @@ begin
         if Pos('{"content":{"id"', src) > 1 then
           Done := True
         else begin
-          SetActiveWindow(Handle);
-          WVWindowParent1.SetFocus;
+          //SetActiveWindow(Handle);
+          //WVWindowParent1.SetFocus;
+          WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
 				end;
       end else begin
@@ -913,40 +928,29 @@ begin
         if Pos('<div class="text " id="novelBody"', src) > 1 then
           Done := True
         else begin
-          SetActiveWindow(Handle);
-          WVWindowParent1.SetFocus;
+          //SetActiveWindow(Handle);
+          //WVWindowParent1.SetFocus;
+          WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
 				end;
-(*
-        r := TRegExpr.Create('<div class="text " id="novelBody.*?></div>');
-        try
-          if r.Exec(TBuff) then
-          begin
-            body := UTF8Copy(TBuff, r.MatchPos[0], r.MatchLen[0]);
-            body := ReplaceRegExpr('<div class="text " id="novelBody.*?>', body, '');
-            body := ReplaceRegExpr('</div>', body, '');
-          end else
-            body := '';
-        finally
-          r.Free;
-        end;
-*)
         // 本文がない、もしくSBOMISSが含まれていれば、Webページからフォーカスが
         // 外れて本文が非表示になっている状態なのでwebページにフォーカスを当てて
         // 再度HTMLソース取得を試みる
         if UTF8Pos(SBOMISS, Tbuff) > 0 then
         begin
           TBuff := '';  // TBuffをクリアする
-          SetActiveWindow(Handle);
-          WVWindowParent1.SetFocus;
+          //SetActiveWindow(Handle);
+          //WVWindowParent1.SetFocus;
+          WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
         end else
           Done := True;
 			end;
 		end;
   end else begin
-    SetActiveWindow(Handle);
-    WVWindowParent1.SetFocus;
+    //SetActiveWindow(Handle);
+    //WVWindowParent1.SetFocus;
+    WV2.SetFocus;
     WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
   end;
 end;
