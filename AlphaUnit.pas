@@ -1,6 +1,8 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.52 2026/03/25 ログファイルへの作品URL追加忘れを修正した
+                  トップページを習得出来たかどうかの判定値を追加した
   2.51 2026/03/24 各話ページの取得に失敗する場合があるためブラウザコントロールへの強制フォーカスの
                   当て方を変更した
                   また各話ページの取得に失敗した場合のリトライを強化した
@@ -444,6 +446,7 @@ begin
     TextPage.Add('');
     TextPage.Add(AO_PB2);
     TextPage.Add('');
+    LogFile.Add(Alphadl.URL.Text);
     LogFile.Add('タイトル：' + title);
     LogFile.Add('作者　　：' + author);
     if AuthURL <> '' then
@@ -908,18 +911,15 @@ begin
   if aHTML <> '' then
   begin
     src := aHTML;
-    //src := UTF8StringReplace(src, '"', '', [rfReplaceAll]);
     TBuff := src;
 
     if not Done then
     begin
       if TopPage then
       begin
-        if Pos('{"content":{"id"', src) > 1 then
+        if (Pos('{"content":{"id"', src) > 1) and (Pos('<div class="episodes">', src) > 1) then
           Done := True
         else begin
-          //SetActiveWindow(Handle);
-          //WVWindowParent1.SetFocus;
           WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
 				end;
@@ -928,8 +928,6 @@ begin
         if Pos('<div class="text " id="novelBody"', src) > 1 then
           Done := True
         else begin
-          //SetActiveWindow(Handle);
-          //WVWindowParent1.SetFocus;
           WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
 				end;
@@ -939,8 +937,6 @@ begin
         if UTF8Pos(SBOMISS, Tbuff) > 0 then
         begin
           TBuff := '';  // TBuffをクリアする
-          //SetActiveWindow(Handle);
-          //WVWindowParent1.SetFocus;
           WV2.SetFocus;
           WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
         end else
@@ -948,8 +944,6 @@ begin
 			end;
 		end;
   end else begin
-    //SetActiveWindow(Handle);
-    //WVWindowParent1.SetFocus;
     WV2.SetFocus;
     WV2.ExecuteScript('encodeURI(document.documentElement.outerHTML)');
   end;
