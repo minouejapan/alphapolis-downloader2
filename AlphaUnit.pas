@@ -1,6 +1,8 @@
 ﻿(*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  2.6 2026/04/09  目次の途中にレンタル部分があるとそれ以降をダウンロード出来なかった不具合を修正した
+                  ログファイルの見出しをna6dlと統一した
   2.52 2026/03/25 ログファイルへの作品URL追加忘れを修正した
                   トップページを習得出来たかどうかの判定値を追加した
   2.51 2026/03/24 各話ページの取得に失敗する場合があるためブラウザコントロールへの強制フォーカスの
@@ -190,6 +192,17 @@ const
   SBOMISS  = '<div class="dots-indicator" id="LoadingEpisode">';
 
   CRLF     = #$0D#$0A;
+
+  // ログファイル表題
+  NVURL  = '小説URL   :';
+  NVTITL = 'タイトル  :';
+  NVAUTH = '作者      :';
+  NVAURL = '作者URL   :';
+  NVBIGN = '掲載日    :';
+  NVFINI = '最終掲載日:';
+  NVLUPD = '最新掲載日:';
+  NVLRNW = '最終更新日:';
+  NVSYNP = 'あらすじ  :';
 
 
 // ユーザメッセージID
@@ -446,16 +459,16 @@ begin
     TextPage.Add('');
     TextPage.Add(AO_PB2);
     TextPage.Add('');
-    LogFile.Add(Alphadl.URL.Text);
-    LogFile.Add('タイトル：' + title);
-    LogFile.Add('作者　　：' + author);
+    LogFile.Add(NVURL + Alphadl.URL.Text);
+    LogFile.Add(NVTITL + title);
+    LogFile.Add(NVAUTH + author);
     if AuthURL <> '' then
-      LogFile.Add('作者URL : ' + AuthURL);
+      LogFile.Add(NVAURL + AuthURL);
     TextPage.Add(AO_KKL);
     TextPage.Add(abstrct);
     TextPage.Add(AO_KKR);
     TextPage.Add(AO_PB2);
-    LogFile.Add('あらすじ：');
+    LogFile.Add(NVSYNP);
     LogFile.Add(abstrct);
     if IsErr then
       LogFile.Add(#13#10'エラー：取得出来ないページがありました.');
@@ -610,7 +623,7 @@ begin
       FileName := TrimSpace(op);
       if UTF8UpperCase(ExtractFileExt(op)) <> '.TXT' then
         FileName := FileName + '.txt';
-      LogFile.Add(URL.Text);
+      LogFile.Add(NVURL + URL.Text);
     end;
   end;
 end;
@@ -735,7 +748,9 @@ Retry:
     // 取得失敗とみなしてリトライする
     While (cnt > 1) and (
           ((i = 1) and not ExecRegExpr(NextURL, TBuff))
-       or ((i > 1) and not ExecRegExpr(PrevURL, TBuff))) do
+       or ((i > 1) and not ExecRegExpr(PrevURL, TBuff))
+       and ((i > 1) and not ExecRegExpr('前の話<br>\(レンタル\)', TBuff))  // 目次の途中にレンタルがある場合
+      ) do
     begin
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       // リトライを20回×3セット行っても駄目だった場合はエラーとする
