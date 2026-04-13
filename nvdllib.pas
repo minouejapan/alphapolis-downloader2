@@ -198,7 +198,7 @@ end;
 function Restore2RealChar(Base: string): string;
 var
   tmp, cd, rcd: string;
-  w, mp, ml: integer;
+  w: integer;
   ch: Char;
   wch: WideChar;
   r: TRegExpr;
@@ -216,30 +216,28 @@ begin
   // 正規表現による処理に変更した(2024/3/9)
   r := TRegExpr.Create;
   try
+    // HTMLエスケープ文字(&#xxxx;)
     r.Expression  := '&#.*?;';
     r.InputString := tmp;
     if r.Exec then
     begin
       repeat
         cd := r.Match[0];
-        mp := r.MatchPos[0];
-        ml := r.MatchLen[0];
-        UTF8Delete(tmp, mp, ml);
         UTF8Delete(cd, 1, 2);           // &#を削除する
         UTF8Delete(cd, UTF8Length(cd), 1);  // 最後の;を削除する
         if cd[1] = 'x' then         // 先頭が16進数を表すxであればDelphiの16進数接頭文字$に変更する
           cd[1] := '$';
         try
           w := StrToInt(cd);
-          ch := Char(w);
+          wch := WideChar(w);
         except
-          ch := '?';
+          wch := '?';
         end;
-        UTF8Insert(ch, tmp, mp);
+        tmp := ReplaceRegExpr(r.Match[0], tmp, wch);
         r.InputString := tmp;
       until not r.Exec;
     end;
-    // unicodeエスケープ文字(\uxxxx)
+   // unicodeエスケープ文字(\uxxxx)
     r.Expression  := '\\u[0-9A-Fa-f]{4}';
     r.InputString := tmp;
     if r.Exec then

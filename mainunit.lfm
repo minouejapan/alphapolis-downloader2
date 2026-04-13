@@ -1,0 +1,134 @@
+object adlForm: TadlForm
+  Left = 341
+  Height = 81
+  Top = 250
+  Width = 802
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsSingle
+  Caption = 'adlForm'
+  ClientHeight = 81
+  ClientWidth = 802
+  LCLVersion = '4.6.0.0'
+  OnActivate = FormActivate
+  OnClose = FormClose
+  OnCloseQuery = FormCloseQuery
+  OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
+  OnShow = FormShow
+  object MainPanel: TPanel
+    Left = 0
+    Height = 79
+    Top = 0
+    Width = 802
+    Align = alTop
+    BevelOuter = bvNone
+    ClientHeight = 79
+    ClientWidth = 802
+    TabOrder = 0
+    object Status: TLabel
+      Left = 204
+      Height = 15
+      Top = 11
+      Width = 24
+      Caption = '状態'
+      Color = clBtnFace
+      ParentColor = False
+    end
+    object Label1: TLabel
+      Left = 8
+      Height = 15
+      Top = 12
+      Width = 95
+      Caption = '小説TOPページURL'
+      Color = clBtnFace
+      ParentColor = False
+    end
+    object URL: TEdit
+      Left = 12
+      Height = 23
+      Top = 28
+      Width = 599
+      TabOrder = 0
+    end
+    object Elapsed: TLabel
+      Left = 516
+      Height = 15
+      Top = 12
+      Width = 87
+      Caption = '経過時間：00:00'
+      Color = clBtnFace
+      ParentColor = False
+    end
+    object StartBtn: TButton
+      Left = 616
+      Height = 25
+      Top = 28
+      Width = 86
+      Caption = 'ダウンロード(&D)'
+      TabOrder = 1
+      OnClick = StartBtnClick
+    end
+    object CancelBtn: TButton
+      Left = 708
+      Height = 25
+      Top = 28
+      Width = 70
+      Caption = '中止(&A)'
+      Enabled = False
+      TabOrder = 2
+      OnClick = CancelBtnClick
+    end
+    object NvTitle: TLabel
+      Left = 16
+      Height = 15
+      Top = 58
+      Width = 595
+      AutoSize = False
+      Caption = '作品タイトル：'
+      Color = clBtnFace
+      ParentColor = False
+    end
+    object OCBtn: TSpeedButton
+      Left = 756
+      Height = 22
+      Top = 56
+      Width = 23
+      Caption = '▼'
+      Flat = True
+      OnClick = OCBtnClick
+    end
+  end
+  object WebPanel: TPanel
+    Left = 0
+    Height = 2
+    Top = 79
+    Width = 802
+    Align = alClient
+    BevelOuter = bvNone
+    ClientHeight = 2
+    ClientWidth = 802
+    TabOrder = 1
+    object CEFWindowParent1: TCEFWindowParent
+      Left = 0
+      Height = 2
+      Top = 0
+      Width = 802
+      Align = alClient
+      TabOrder = 0
+    end
+  end
+  object Timer1: TTimer
+    Interval = 500
+    OnTimer = Timer1Timer
+    Left = 28
+    Top = 229
+  end
+  object Chromium1: TChromium
+    OnTextResultAvailable = Chromium1TextResultAvailable
+    OnLoadEnd = Chromium1LoadEnd
+    OnAfterCreated = Chromium1AfterCreated
+    OnBeforeClose = Chromium1BeforeClose
+    Left = 28
+    Top = 296
+  end
+end
