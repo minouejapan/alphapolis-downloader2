@@ -11,8 +11,8 @@ Lazarus3.2以降でプロジェクトファイルalphadlw.lpiを開いてビル�
 
 ~~または、Delphi (XE2以降)でalphadlw.dprojを開いてビルドしてください。~~ ver2.5からはLazarusのみの対応としました
 
-尚、ビルドするためには、~~~WebView4Delphi~~~ CEF4DelphiとTRegExprが必要です。<br>
-~~~https://github.com/salvadordf/WebView4Delphi~~~<br>
+尚、ビルドするためには、~~WebView4Delphi~~ CEF4DelphiとTRegExprが必要です。<br>
+~~https://github.com/salvadordf/WebView4Delphi~~<br>
 https://github.com/salvadordf/CEF4Delphi<br>
 https://github.com/andgineer/TRegExpr
 
