@@ -35,13 +35,12 @@ MIT
 https://cef-builds.spotifycdn.com/cef_binary_146.0.10%2Bg8219561%2Bchromium-146.0.7680.179_windows64.tar.bz2<br>
 <br>
 ダウンロード後にこのアーカイブファイルを任意のフォルダに展開してください(Windwos 11であればファイルエクスプローラで直接展開できます。Windows 10の場合は7-Zip等のアーカイバを利用して展開してください)。<br>
-<br>
+
 次に以下のファイル(cef4lib.zip)をダウンロードして展開して、取り出したcef4lib.batをCEF4アーカイブファイルを展開したフォルダ内にコピーします。<br>
 
-[cef4lib.zip](https://github.com/user-attachments/files/26692036/cef4lib.zip)
-<br>
+[cef4lib.zip](https://github.com/user-attachments/files/26692036/cef4lib.zip)<br>
 
-CEF4アーカイブファイルを展開したフォルダ内が以下のようになると思いますので、ファイルエクスプローラでdef4lib.batをダブルクリックして実行してください。
+CEF4アーカイブファイルを展開したフォルダ内が以下のようになると思いますので、ファイルエクスプローラでdef4lib.batをダブルクリックして実行してください。<br>
 <img width="416" height="363" alt="cef4folder" src="https://github.com/user-attachments/assets/679ec8d0-76e2-40a8-8446-032ca38a6c77" /><br>
 実行中・・・<br>
 
