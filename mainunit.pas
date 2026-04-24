@@ -1,6 +1,9 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.1 2026/04/25  ページ情報取得リトライ時にCEF4にフォーカスを当てるようにした
+                  リトライに失敗しても最後までダウンロードし、ログファイルにエラー履歴を残すようにした
+                  CEF4のバージョンを146.0.10から146.0.12に更新した
   3.0 2026/04/15  [CEF4Delphi版(https://github.com/salvadordf/CEF4Delphi)]
                   WebページアクセスをWebView4Delphi(WebView2)からCEF4Delphi(Chromium Embedded Framework)
                   に切り替えた
@@ -762,14 +765,15 @@ end;
 // 該当ページを取得できたかチェックする
 function IsCorrectPage(page: string; curl: string): Boolean;
 begin
-  Result := ExecRegExpr('<link rel="canonical" href="' + curl, page);
+  Result := ExecRegExpr('href="' + curl, page);
 end;
 
 // ダウンロード処理メイン
 procedure TadlForm.StartBtnClick(Sender: TObject);
 var
   page, stat: string;
-  i, cnt, j, sc, ct, n: integer;
+  i, cnt, j, k, sc, ct, n: integer;
+  done: boolean;
 label
   Retry, Quit;
 begin
@@ -826,26 +830,40 @@ begin
     URL.Text := 'https://www.alphapolis.co.jp' + PageList[i - 1];
 Retry:
     n := 1;
-    page := GetHTMLSrc(URL.Text);
-    while not IsCorrectPage(page, URL.Text) do
+    done := False;
+    // ページ情報から本文を取得できるまで10回繰り返す
+    for k := 1 to 10 do
     begin
-      Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
-      // リトライを10回行っても駄目だった場合はエラーとする
-      if n = 10 then
+      page := GetHTMLSrc(URL.Text);
+      // 正しいページ情報を所得出来るまで１０回繰り返す
+      while not IsCorrectPage(page, URL.Text) do
       begin
-        TextPage.Add('★エラー：リトライ回数超過');
-        page := '';
+        Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
+        // リトライを10回行っても駄目だった場合はエラーとする
+        if n = 10 then
+        begin
+          TextPage.Add(URL.Text + '：リトライに失敗しました.');
+          LogFile.Add(URL.Text + '：リトライに失敗しました.');
+          page := '';
+          Break;
+        end;
+        CEFWindowParent1.SetFocus;  // CEF4にフォーカスを当てる
+        Sleep(500);
+        page := GetHTMLSrc(URL.Text);
+		  end;
+      if ParsePage(page) then
+      begin
+        done := True;
         Break;
       end;
-    page := GetHTMLSrc(URL.Text);
 		end;
-    if not ParsePage(page) then
+    if not done then
     begin
-      TextPage.Add('★エラー：ページ情報を取得出来ない');
+      TextPage.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
+      LogFile.Add(URL.Text + '：ページ情報を取得出来ませんでした.'#13#10+page);
       IsErr := True;
-      Break;
-    end;
-    if hWnd <> 0 then
+		end;
+		if hWnd <> 0 then
     begin
       Application.ProcessMessages;
       SendMessage(hWnd, WM_DLINFO, i, 1);
@@ -866,7 +884,7 @@ Retry:
       LogFile.SaveToFile(ChangeFileExt(Filename, '.log'), TEncoding.UTF8);
     end;
   end else begin
-    if FileName = '' then
+    if (FileName = '') or IsErr then
       Status.Caption := Status.Caption + '・・失敗'
     else
       Status.Caption := Status.Caption + '・・中止';
