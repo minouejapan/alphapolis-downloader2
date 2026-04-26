@@ -1,8 +1,11 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.11 2026/04/26 ExitCode(38): The browser process exited because it was re-launched without elevation.
+                  エラーが発生する場合の対応として[GlobalCEFApp.DoNotDeElevate:=True]を追加した
+                  (https://github.com/salvadordf/CEF4Delphi/issues/578)
   3.1 2026/04/25  ページ情報取得リトライ時にCEF4にフォーカスを当てるようにした
-  　　　　　　　　　ページ情報から本文を取得できない場合のリトライ処理を追加した	
+                  ページ情報から本文を取得できない場合のリトライ処理を追加した
                   リトライに失敗しても最後までダウンロードし、ログファイルにエラー履歴を残すようにした
                   CEF4のバージョンを146.0.10から146.0.12に更新した
   3.0 2026/04/15  [CEF4Delphi版(https://github.com/salvadordf/CEF4Delphi)]

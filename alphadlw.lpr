@@ -27,6 +27,7 @@ begin
   GlobalCEFApp.FrameworkDirPath := ExtractFilePath(ParamStr(0)) + 'cef4';
   GlobalCEFApp.ResourcesDirPath := ExtractFilePath(ParamStr(0)) + 'cef4';
   GlobalCEFApp.LocalesDirPath   := ExtractFilePath(ParamStr(0)) + 'cef4\locales';
+  GlobalCEFApp.DoNotDeElevate   := True; // ExitCode(38): The browser process exited because it was re-launched without elevation.
 
   RequireDerivedFormResource    :=True;
 	Application.Scaled            :=True;
