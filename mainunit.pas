@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.2 2026/06/03  アルファポリス作品ページのHTML構造が変更されたことに対応した
   3.11 2026/04/26 ExitCode(38): The browser process exited because it was re-launched without elevation.
                   エラーが発生する場合の対応として[GlobalCEFApp.DoNotDeElevate:=True]を追加した
                   (https://github.com/salvadordf/CEF4Delphi/issues/578)
@@ -477,14 +478,14 @@ begin
   begin
     if fTopPage then
     begin
-      if (Pos('{"content":{"id"', str) > 1) and (Pos('<div class="episodes">', str) > 1) then
+      if (Pos('{"content":{"id"', str) > 1) and (Pos('<div id="app-cover-episode-v2"'{'<div class="episodes">'}, str) > 1) then
       begin
         fHTMLSrc := str;
         fTopPage := False;
 		  end else
         GetSourceCEF4;
 	  end else begin
-      if Pos('<div class="text " id="novelBody"', str) > 1 then
+      if Pos('<div class="p-novel-episode__text"'{'<div class="text " id="novelBody"'}, str) > 1 then
       begin
         fHTMLSrc := str;
 		  end else
@@ -631,21 +632,21 @@ begin
 
   shp := TSHParser.Create(Page);
   try
-    chapt := shp.FindRegex('<div class="chapter-title">', '</div>', False);
+    chapt := shp.FindRegex('<div class="p-novel-episode__chapter-title">', '</div>', False);
     chapt := Trim(chapt);
     chapt := Restore2RealChar(chapt);
     if Chapter = chapt then
       chapt := ''
     else
       Chapter := chapt;
-    subt  := shp.FindRegex('<h2 class="episode-title">', '</h2>', False);
+    subt  := shp.FindRegex('<h2 class="p-novel-episode__episode-title">', '</h2>', False);
     subt  := Trim(subt);
     subt  := Restore2RealChar(subt);
-    body  := shp.FindRegex('<div class="text " id="novelBody".*?>', '</div>', False);
+    body  := shp.FindRegex('<div class="p-novel-episode__text".*?>', '</div>', False);
     body  := GetText(body); // HTMLタグの処理
     if chapt <> '' then
       TextPage.Add(AO_CPB + chapt + AO_CPE);
-    if (subt <> '') and (body <> '') and (Pos('<divclass="dots-indicator"id="LoadingEpisode">', body) = 0) then
+    if (subt <> '') and (body <> '') and (Pos('<div class="dots-indicator"id="LoadingEpisode">', body) = 0) then
     begin
       TextPage.Add(AO_SEB + subt + AO_SEE);
       TextPage.Add(body);
@@ -671,7 +672,7 @@ begin
   Result := '';
   shp := TSHParser.Create(MainPage);
   try
-    stat := shp.Find('span', 'class', 'content-status complete');
+    stat := shp.Find('div', 'class', 'p-sidebar-content-info__summary', False);
     if UTF8Pos('連載中', stat) > 0 then
       Result := '【連載中】'
     else if UTF8Pos('完結', stat) > 0 then
@@ -685,7 +686,7 @@ end;
 procedure TadlForm.ParseChapter(MainPage: string);
 var
   i: integer;
-  ss, ts, title, fname, author, abstrct, fn, sendstr, cv: string;
+  ss, title, author, abstrct, fn, sendstr, cv: string;
   ws: WideString;
   conhdl: THandle;
   shp: TSHParser;
@@ -696,20 +697,20 @@ begin
   r   := TRegExpr.Create;
   try
     // 表紙画像
-    cv      := shp.Find('div', 'class', 'cover', False);
+    cv      := shp.Find('div', 'class', 'c-content-cover p-sidebar-content-info__cover', False);
     cv      := FindRegex(cv, '<img src="', '"');
-    title   := GetText(shp.Find('h1', 'class', 'title', False));
+    title   := GetText(shp.Find('h1', 'class', 'p-content-info__title is-novel', False));
     // 作者・作者URL
-    ss      := shp.Find('div', 'class', 'author', False);
+    ss      := shp.Find('div', 'class', 'p-content-info__author-diary', False);
     author  := GetText(FindRegex(ss, '<a href=.*?>', '</a>'));
-    AuthURL := FindRegex(ss, '<a href="', '">');
+    AuthURL := FindRegex(ss, '<a href="', '" class=');
     // あらすじ
-    abstrct := GetText(shp.Find('div', 'class', 'abstract', False));
+    abstrct := GetText(shp.Find('div', 'class', 'p-content-info__abstract', False));
     // 各話ページURL
-    epurl   := shp.FindAll('div', 'class', 'episode', False);
+    epurl   := shp.FindRegexAll('<a class="p-table-of-contents__episode-link" ', '</div></a>', False);
     for i := 0 to epurl.Count - 1 do
     begin
-      ss := FindRegex(epurl[i], '<a href="', '">');
+      ss := FindRegex(epurl[i], 'href="', '">');
       PageList.Add(ss);
 		end;
     // 保存ファイル名
@@ -754,7 +755,7 @@ begin
       sendstr := title + ',' + author;
       // 送信する文字列をUTF-16にする
       ws := UTF8ToUTF16(sendstr);
-      Cds.dwData := PageList.Count - StartN + 1;
+      Cds.dwData := PageList.Count - StartN;
       Cds.cbData := ByteLength(ws) + 2;
       Cds.lpData := PWideChar(ws);
       SendMessage(hWnd, WM_COPYDATA, Application.Handle, LPARAM(Addr(Cds)));
@@ -769,7 +770,7 @@ end;
 // 該当ページを取得できたかチェックする
 function IsCorrectPage(page: string; curl: string): Boolean;
 begin
-  Result := ExecRegExpr('href="' + curl, page);
+  Result := ExecRegExpr('content="' + curl, page);
 end;
 
 // ダウンロード処理メイン
@@ -864,7 +865,7 @@ Retry:
     if not done then
     begin
       TextPage.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
-      LogFile.Add(URL.Text + '：ページ情報を取得出来ませんでした.'#13#10+page);
+      LogFile.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
       IsErr := True;
 		end;
 		if hWnd <> 0 then
