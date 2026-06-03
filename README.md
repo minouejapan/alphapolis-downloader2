@@ -51,5 +51,5 @@ CEF4アーカイブファイルを展開したフォルダ内が以下のよう�
 するとcef4というフォルダが作成されていると思います。このフォルダ内には必要な全てのランタイムライブラリとCEF4のドキュメントが収められています。<br>
 <img width="394" height="238" alt="cef4lib" src="https://github.com/user-attachments/assets/1da9fa09-3850-4667-ab29-ee4ad3dbfe71" />
 <br>
-このcef4フォルダを丸ごとalphadlw.exeがあるフォルダ内にコピーします。以上でaplhadlw 3.0を実行できるようになりました。
+このcef4フォルダを丸ごとalphadlw.exeがあるフォルダ内にコピーします。以上でaplhadlwを実行できるようになります。
 <br>
