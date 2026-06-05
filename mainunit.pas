@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.21 2026/06/06 HTML構造が変更への対応で挿絵処理を修正していなかった不具合を修正した
   3.2 2026/06/03  アルファポリス作品ページのHTML構造が変更されたことに対応した
   3.11 2026/04/26 ExitCode(38): The browser process exited because it was re-launched without elevation.
                   エラーが発生する場合の対応として[GlobalCEFApp.DoNotDeElevate:=True]を追加した
@@ -300,23 +301,12 @@ end;
 // 但し、画像ファイルはダウンロードせずにリンク先をそのまま埋め込む
 function ChangeImage(Base: string): string;
 var
-  org, lnk: string;
-  r: TRegExpr;
+  tmp: string;
 begin
-  r := TRegExpr.Create;      // 不具合があったため全面書き換え(2025/1/9)
-  try
-    r.Expression  := SPICTIN;
-    while r.Exec(Base) do
-    begin
-      org := r.Match[0];
-      lnk := ReplaceRegExpr(SPICTE, ReplaceRegExpr(SPICTB, org, ''), '');
-      lnk := AO_PIB + lnk + AO_PIE;
-      Base := UTF8StringReplace(Base, org, lnk, []);
-    end;
-  finally
-    r.Free;
-  end;
-  Result := Base;
+  tmp := Base;
+  tmp := ReplaceRegExpr('<div class=.*?<img src="', tmp, AO_PIB);
+  tmp := ReplaceRegExpr('" alt=""></a></div>', tmp, AO_PIE);
+  Result := tmp;
 end;
 
 // 本文先頭の半角スペースを除去する
@@ -345,6 +335,7 @@ var
   tmp: string;
 begin
   tmp := ChangeBRK(Source);     // </ br>をCRLFに変換する
+  tmp := ChangeImage(tmp);      // 挿絵HTMLタグを青空文庫タグに変換する
   tmp := ChangeRuby(tmp);       // ルビのタグを変換する
   tmp := ChangeEm(tmp);         // 強調（傍点）タグを変換する
   tmp := Restore2RealChar(tmp); // エスケースされた特殊文字を本来の文字に変換する
@@ -628,7 +619,6 @@ begin
     Exit;
   end;
 	Page  := ChangeAozoraTag(Page);  // 最初に青空文庫のルビタグ文字｜《》を変換する
-  Page  := ChangeImage(Page);
 
   shp := TSHParser.Create(Page);
   try
@@ -642,7 +632,7 @@ begin
     subt  := shp.FindRegex('<h2 class="p-novel-episode__episode-title">', '</h2>', False);
     subt  := Trim(subt);
     subt  := Restore2RealChar(subt);
-    body  := shp.FindRegex('<div class="p-novel-episode__text".*?>', '</div>', False);
+    body  := shp.Find('div', 'class', 'p-novel-episode__text', False);
     body  := GetText(body); // HTMLタグの処理
     if chapt <> '' then
       TextPage.Add(AO_CPB + chapt + AO_CPE);
