@@ -1,7 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
-  3.21 2026/06/06 HTML構造が変更への対応で挿絵処理を修正していなかった不具合を修正した
+  3.21 2026/06/06 HTML構造変更への対応で挿絵処理の修正を忘れていた不具合を修正した
   3.2 2026/06/03  アルファポリス作品ページのHTML構造が変更されたことに対応した
   3.11 2026/04/26 ExitCode(38): The browser process exited because it was re-launched without elevation.
                   エラーが発生する場合の対応として[GlobalCEFApp.DoNotDeElevate:=True]を追加した
