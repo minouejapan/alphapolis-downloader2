@@ -238,6 +238,8 @@ const
   NVLRNW = '最終更新日:';
   NVSYNP = 'あらすじ  :';
 
+  R18MARK = '【R-18】';
+
 
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
@@ -676,7 +678,7 @@ end;
 procedure TadlForm.ParseChapter(MainPage: string);
 var
   i: integer;
-  ss, title, author, abstrct, fn, sendstr, cv: string;
+  ss, title, author, abstrct, fn, sendstr, cv, r18mk: string;
   ws: WideString;
   conhdl: THandle;
   shp: TSHParser;
@@ -694,6 +696,12 @@ begin
     ss      := shp.Find('div', 'class', 'p-content-info__author-diary', False);
     author  := GetText(FindRegex(ss, '<a href=.*?>', '</a>'));
     AuthURL := FindRegex(ss, '<a href="', '" class=');
+    // R-18かどうか
+    r18mk   := shp.Find('div', 'class', 'p-sidebar-panel', False);
+    if ExecRegExpr('<span class="c-attribute-tag c-attribute-tag--rating">.*?R18.*?</span>', r18mk) then
+      r18mk := R18MARK
+    else
+      r18mk := '';
     // あらすじ
     abstrct := GetText(shp.Find('div', 'class', 'p-content-info__abstract', False));
     // 各話ページURL
