@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.23 2026/06/20 【R18】マークがつかない場合があった不具合を修正した
   3.22 2026/06/18 R-18作品の場合タイトル名にR-18マークを付与するようにした
   3.21 2026/06/06 HTML構造変更への対応で挿絵処理の修正を忘れていた不具合を修正した
   3.2 2026/06/03  アルファポリス作品ページのHTML構造が変更されたことに対応した
@@ -699,7 +700,7 @@ begin
     AuthURL := FindRegex(ss, '<a href="', '" class=');
     // R-18かどうか
     r18mk   := shp.Find('div', 'class', 'p-sidebar-panel', False);
-    if ExecRegExpr('<span class="c-attribute-tag c-attribute-tag--rating">.*?R18.*?</span>', r18mk) then
+    if Pos('R18', r18mk) > 1 then
       r18mk := R18MARK
     else
       r18mk := '';
@@ -713,8 +714,13 @@ begin
       PageList.Add(ss);
 		end;
     // 保存ファイル名
-    if UTF8Pos('完結', title) = 0 then
+    if NvStat = '【完結】' then
+    begin
+      if UTF8Pos('完結', title) = 0 then
+        title := NvStat + title;
+		end else
       title := NvStat + title;
+    title := r18mk + title;
     if Filename = '' then
     begin
       fn := PathFilter(Restore2RealChar(title));
