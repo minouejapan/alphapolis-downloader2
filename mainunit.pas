@@ -1,6 +1,8 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.24 2026/07/20 指定したURLが存在しない場合処理が停止する不具合を修正した
+                  nvdllib内の数値文字参照コード&#????;のデコード処理を修正した
   3.23 2026/06/20 【R18】マークがつかない場合があった不具合を修正した
   3.22 2026/06/18 R-18作品の場合タイトル名にR-18マークを付与するようにした
   3.21 2026/06/06 HTML構造変更への対応で挿絵処理の修正を忘れていた不具合を修正した
@@ -473,7 +475,8 @@ begin
   begin
     if fTopPage then
     begin
-      if (Pos('{"content":{"id"', str) > 1) and (Pos('<div id="app-cover-episode-v2"'{'<div class="episodes">'}, str) > 1) then
+      if (Pos('ページが見つかりません', str) > 1) or
+         (Pos('{"content":{"id"', str) > 1) and (Pos('<div id="app-cover-episode-v2"'{'<div class="episodes">'}, str) > 1) then
       begin
         fHTMLSrc := str;
         fTopPage := False;
@@ -687,7 +690,12 @@ var
   r: TRegExpr;
   epurl: TStringList;
 begin
-  shp := TSHParser.Create(MainPage);
+  // ページがなくなっている場合の処理
+  if Pos('ページが見つかりません', MainPage) > 0 then
+  begin
+    Exit;
+	end;
+	shp := TSHParser.Create(MainPage);
   r   := TRegExpr.Create;
   try
     // 表紙画像

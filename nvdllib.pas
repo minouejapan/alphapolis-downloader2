@@ -6,7 +6,7 @@
   せるようにした
   このことによって各ダウンローダーのソースコードがコンパクトになった
 
-
+	1.2  数値文字参照コード&#????;のデコード処理を修正した
 	1.1	 2025/03/03 PathFilterに処理漏れの"<>を追加した
 	1.0  2024/08/19 初版
 
@@ -212,12 +212,11 @@ begin
   tmp := UTF8StringReplace(tmp,  '&brvbar;',  '|',  [rfReplaceAll]);
   tmp := UTF8StringReplace(tmp,  '&copy;',    '©',  [rfReplaceAll]);
   tmp := UTF8StringReplace(tmp,  '&amp;',     '&',  [rfReplaceAll]);
-  // &#????;にエンコードされた文字をデコードする(2023/3/19)
+  // &#????;にエンコードされた数値文字参照コードをデコードする(2023/3/19)
   // 正規表現による処理に変更した(2024/3/9)
   r := TRegExpr.Create;
   try
-    // HTMLエスケープ文字(&#xxxx;)
-    r.Expression  := '&#.*?;';
+    r.Expression  := '&#\w.*?;';
     r.InputString := tmp;
     if r.Exec then
     begin
@@ -237,7 +236,7 @@ begin
         r.InputString := tmp;
       until not r.Exec;
     end;
-   // unicodeエスケープ文字(\uxxxx)
+    // unicodeエスケープ文字(\uxxxx)
     r.Expression  := '\\u[0-9A-Fa-f]{4}';
     r.InputString := tmp;
     if r.Exec then
