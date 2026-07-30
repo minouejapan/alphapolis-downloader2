@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.3  2026/07/30 トップページのHTMLタグの一部変更で情報を取得出来なくなったことに対応した
   3.24 2026/07/20 指定したURLが存在しない場合処理が停止する不具合を修正した
                   nvdllib内の数値文字参照コード&#????;のデコード処理を修正した
   3.23 2026/06/20 【R18】マークがつかない場合があった不具合を修正した
@@ -476,7 +477,7 @@ begin
     if fTopPage then
     begin
       if (Pos('ページが見つかりません', str) > 1) or
-         (Pos('{"content":{"id"', str) > 1) and (Pos('<div id="app-cover-episode-v2"'{'<div class="episodes">'}, str) > 1) then
+         (Pos('{"content":{"id"', str) > 1) and (Pos('<div class="p-content-info">'{'<div id="app-cover-episode-v2"'}{'<div class="episodes">'}, str) > 1) then
       begin
         fHTMLSrc := str;
         fTopPage := False;
@@ -619,8 +620,8 @@ var
 begin
   Result := True;
 
-  sp := UTF8Pos(SERRSTR, body);
-  if sp > 0 then
+  sp := UTF8Pos(SERRSTR, Page);
+  if (sp > 0) or (Page = '') then
   begin
     Result := False;
     Exit;
