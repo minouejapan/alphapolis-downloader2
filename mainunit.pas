@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.31 2026/08/08 HTMLソース取得時に一定回数リトライしても取得出来ない場合エラーあｚ
   3.3  2026/07/30 トップページのHTMLタグの一部変更で情報を取得出来なくなったことに対応した
   3.24 2026/07/20 指定したURLが存在しない場合処理が停止する不具合を修正した
                   nvdllib内の数値文字参照コード&#????;のデコード処理を修正した
@@ -187,6 +188,7 @@ type
     CDS: TCopyDataStruct;
     StartN: integer;
     IsErr: Boolean;
+    GetSrcCount: integer;
     procedure ExecuteJS;
     function GetHTMLSrc(URLadr: string): string;
     function ParsePage(Page: string): Boolean;
@@ -481,15 +483,30 @@ begin
       begin
         fHTMLSrc := str;
         fTopPage := False;
-		  end else
-        GetSourceCEF4;
-	  end else begin
+		  end else begin
+        Inc(GetSrcCount);
+        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
+        if GetSrcCount > 30 then
+        begin
+          fHTMLSrc := '';
+          fTopPage := False;
+				end else
+				  GetSourceCEF4;
+			end;
+		end else begin
       if Pos('<div class="p-novel-episode__text"'{'<div class="text " id="novelBody"'}, str) > 1 then
       begin
         fHTMLSrc := str;
-		  end else
-        GetSourceCEF4;
-    end;
+		  end else begin
+        Inc(GetSrcCount);
+        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
+        if GetSrcCount > 30 then
+        begin
+          fHTMLSrc := '';
+				end else
+				  GetSourceCEF4;
+			end;
+		end;
   end;
 end;
 
@@ -599,6 +616,7 @@ end;
 function TadlForm.GetHTMLSrc(URLadr: string): string;
 begin
   fHTMLSrc := '';
+  GetSrcCount := 0;
 
   Chromium1.LoadURL(UTF8Decode(URLadr));
   while fHTMLSrc = '' do
