@@ -1,6 +1,7 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.4  2026/08/13 ダウンロードが途中で停止する場合があった不具合を修正した
   3.31 2026/08/08 HTMLソース取得時に一定回数リトライしても取得出来ない場合取得エラーとするようにした
   3.3  2026/07/30 トップページのHTMLタグの一部変更で情報を取得出来なくなったことに対応した
   3.24 2026/07/20 指定したURLが存在しない場合処理が停止する不具合を修正した
@@ -169,6 +170,7 @@ type
     fTopPage,
     fCancel,
     Busy,
+    Done,
     IsCalled: boolean;
     PrevURL,
     NextURL,
@@ -474,15 +476,21 @@ end;
 
 procedure StringVisitor(const str: ustring);
 begin
+  // HTMLソースを取得済みであれば突入させない
+  if adlForm.Done then
+    Exit;
   with adlForm do
   begin
-    if fTopPage then
+    if fCancel then
+      Exit;
+		if fTopPage then
     begin
       if (Pos('ページが見つかりません', str) > 1) or
          (Pos('{"content":{"id"', str) > 1) and (Pos('<div class="p-content-info">'{'<div id="app-cover-episode-v2"'}{'<div class="episodes">'}, str) > 1) then
       begin
         fHTMLSrc := str;
         fTopPage := False;
+        adlForm.Done := True;
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
@@ -497,6 +505,7 @@ begin
       if Pos('<div class="p-novel-episode__text"'{'<div class="text " id="novelBody"'}, str) > 1 then
       begin
         fHTMLSrc := str;
+        adlForm.Done := True;
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
@@ -614,9 +623,13 @@ begin
 end;
 
 function TadlForm.GetHTMLSrc(URLadr: string): string;
+var
+  n: integer;
 begin
+  Done := False;
   fHTMLSrc := '';
   GetSrcCount := 0;
+  n := 0;
 
   Chromium1.LoadURL(UTF8Decode(URLadr));
   while fHTMLSrc = '' do
@@ -624,6 +637,9 @@ begin
     Application.ProcessMessages;
     Sleep(100);
     if fCancel then
+      Break;
+    Inc(n);
+    if n > 30 then
       Break;
 	end;
   Result := fHTMLSrc;
@@ -871,10 +887,14 @@ Retry:
     // ページ情報から本文を取得できるまで10回繰り返す
     for k := 1 to 10 do
     begin
+      if fCancel then
+        Break;
       page := GetHTMLSrc(URL.Text);
       // 正しいページ情報を所得出来るまで１０回繰り返す
       while not IsCorrectPage(page, URL.Text) do
       begin
+        if fCancel then
+          Break;
         Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
         // リトライを10回行っても駄目だった場合はエラーとする
         if n = 10 then
@@ -944,7 +964,10 @@ procedure TadlForm.Timer1Timer(Sender: TObject);
 begin
   Timer1.Enabled := False;
   if not(Chromium1.CreateBrowser(CEFWindowParent1)) and not(Chromium1.Initialized) then
-    Timer1.Enabled := True;
+    Timer1.Enabled := True
+  else
+    // トップページ情報の取得を安定させるため始めにアルファポリスのトップページを表示させる
+    Chromium1.LoadURL(UTF8Decode('https://www.alphapolis.co.jp'));
 end;
 
 procedure TadlForm.WMMove(var aMessage: TWMMove);
