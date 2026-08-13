@@ -32,9 +32,9 @@ Windows10/11上でalphadlw.exeを起動して、ダウンロードしたいア�
 ### ライセンス
 MIT
 
-### CEF4ランタイムライブラリの導入方法
-初めにWindows 64bit用のCEF4ランタイムライブラリを以下のURLからダウンロードします(現在のバージョンは146.0.12です)。<br>
-https://cef-builds.spotifycdn.com/cef_binary_146.0.12%2Bg6214c8e%2Bchromium-146.0.7680.179_windows64.tar.bz2<br>
+### CEF4ランタイムライブラリの導入方法(ver3.4.0.0でライブラリのバージョンが更新されました)
+初めにWindows 64bit用のCEF4ランタイムライブラリを以下のURLからダウンロードします(現在のバージョンは151.3.16です)。<br>
+https://cef-builds.spotifycdn.com/cef_binary_151.3.16%2Bgbe1e15d%2Bchromium-151.0.7922.109_windows64.tar.bz2<br>
 <br>
 ダウンロード後にこのアーカイブファイルを任意のフォルダに展開してください(Windwos 11であればファイルエクスプローラで直接展開できます。Windows 10の場合は7-Zip等のアーカイバを利用して展開してください)。<br>
 
