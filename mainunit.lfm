@@ -35,7 +35,7 @@ object adlForm: TadlForm
       ParentColor = False
     end
     object Label1: TLabel
-      Left = 8
+      Left = 12
       Height = 15
       Top = 12
       Width = 95

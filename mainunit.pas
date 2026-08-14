@@ -1,6 +1,8 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.41 2026/08/14 単体起動時に連続でダウンロードしようとすると失敗する不具合とNaro2mobiから起動した
+                  場合に1回目のダウンロードに失敗する場合があった不具合を修正した
   3.4  2026/08/13 ダウンロードが途中で停止する場合があった不具合を修正した
   3.31 2026/08/08 HTMLソース取得時に一定回数リトライしても取得出来ない場合取得エラーとするようにした
   3.3  2026/07/30 トップページのHTMLタグの一部変更で情報を取得出来なくなったことに対応した
@@ -170,7 +172,8 @@ type
     fTopPage,
     fCancel,
     Busy,
-    Done,
+    fDone,
+    tAcc,
     IsCalled: boolean;
     PrevURL,
     NextURL,
@@ -193,6 +196,7 @@ type
     GetSrcCount: integer;
     procedure ExecuteJS;
     function GetHTMLSrc(URLadr: string): string;
+    procedure TempAcc(URLadr: string);
     function ParsePage(Page: string): Boolean;
     function GetNovelStatus(MainPage: string): string;
     procedure ParseChapter(MainPage: string);
@@ -476,12 +480,10 @@ end;
 
 procedure StringVisitor(const str: ustring);
 begin
-  // HTMLソースを取得済みであれば突入させない
-  if adlForm.Done then
-    Exit;
   with adlForm do
   begin
-    if fCancel then
+    // HTMLソースを取得済みまたは仮アクセスまたは中止シグナルの場合は再突入させない
+    if fDone or tAcc or fCancel then
       Exit;
 		if fTopPage then
     begin
@@ -490,7 +492,7 @@ begin
       begin
         fHTMLSrc := str;
         fTopPage := False;
-        adlForm.Done := True;
+        adlForm.fDone := True;
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
@@ -505,7 +507,7 @@ begin
       if Pos('<div class="p-novel-episode__text"'{'<div class="text " id="novelBody"'}, str) > 1 then
       begin
         fHTMLSrc := str;
-        adlForm.Done := True;
+        adlForm.fDone := True;
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
@@ -608,11 +610,7 @@ begin
   if Height = FmHt then
   begin
     Height := 1000;
-    if URL.Text = '' then
-      Chromium1.LoadURL(UTF8Decode('https://www.alphapolis.co.jp/'))
-    else
-      Chromium1.LoadURL(UTF8Decode(URL.Text));
-
+    TempAcc('https://www.alphapolis.co.jp/');
     OCBtn.Caption := '▲';
   // ブラウザを閉じる
   end else begin
@@ -626,7 +624,8 @@ function TadlForm.GetHTMLSrc(URLadr: string): string;
 var
   n: integer;
 begin
-  Done := False;
+  fDone := False;
+  tAcc := False;
   fHTMLSrc := '';
   GetSrcCount := 0;
   n := 0;
@@ -643,6 +642,16 @@ begin
       Break;
 	end;
   Result := fHTMLSrc;
+end;
+
+// 仮アクセス処理
+procedure TadlForm.TempAcc(URLadr: string);
+begin
+  tAcc := True;
+  Chromium1.LoadURL(UTF8Decode(URLadr));
+  Application.ProcessMessages;
+  Sleep(1500);
+  tAcc := False;
 end;
 
 // 小説本文をHTMLから抜き出して整形する
@@ -851,6 +860,9 @@ begin
   if ParamCount = 0 then
     FileName := '';
 
+  // ダウンロード開始を安定させるため最初にアルファポリストップページにアクセスする
+  TempAcc('https://www.alphapolis.co.jp');
+
   fTopPage := True;
   page := GetHTMLSrc(URL.Text);
   if page <> '' then
@@ -964,10 +976,7 @@ procedure TadlForm.Timer1Timer(Sender: TObject);
 begin
   Timer1.Enabled := False;
   if not(Chromium1.CreateBrowser(CEFWindowParent1)) and not(Chromium1.Initialized) then
-    Timer1.Enabled := True
-  else
-    // トップページ情報の取得を安定させるため始めにアルファポリスのトップページを表示させる
-    Chromium1.LoadURL(UTF8Decode('https://www.alphapolis.co.jp'));
+    Timer1.Enabled := True;
 end;
 
 procedure TadlForm.WMMove(var aMessage: TWMMove);
