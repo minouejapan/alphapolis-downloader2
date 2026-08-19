@@ -1,6 +1,8 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.42 2026/08/18 Naro2mobiから起動するとダウンロード出来ない場合があった不具合を修正した
+                  SHParserの不具合(テキスト中の半角空白文字を除去していた)修正を反映した
   3.41 2026/08/14 単体起動時に連続でダウンロードしようとすると失敗する不具合とNaro2mobiから起動した
                   場合に1回目のダウンロードに失敗する場合があった不具合を修正した
   3.4  2026/08/13 ダウンロードが途中で停止する場合があった不具合を修正した
@@ -544,10 +546,13 @@ end;
 
 procedure TadlForm.FormActivate(Sender: TObject);
 begin
+  inherited;
+
   if URLadr <> '' then
   begin
     Sleep(500);
-    Height := 200;
+    //OCBtnClick(nil);
+    //Height := 300;
     Application.ProcessMessages;
     StartBtnClick(nil);
     Height := 81;
