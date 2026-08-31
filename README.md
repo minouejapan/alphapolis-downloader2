@@ -32,23 +32,23 @@ Windows10/11上でalphadlw.exeを起動して、ダウンロードしたいア�
 ### ライセンス
 MIT
 
-### CEF4ランタイムライブラリの導入方法(ver3.4.0.0でライブラリのバージョンが更新されました)
-初めにWindows 64bit用のCEF4ランタイムライブラリを以下のURLからダウンロードします(現在のバージョンは151.3.16です)。<br>
+### CEFランタイムライブラリの導入方法(ver3.4.0.0でライブラリのバージョンが更新されました)
+初めにWindows 64bit用のCEFランタイムライブラリを以下のURLからダウンロードします(適合するバージョンは151.3.16です)。<br>
 https://cef-builds.spotifycdn.com/cef_binary_151.3.16%2Bgbe1e15d%2Bchromium-151.0.7922.109_windows64.tar.bz2<br>
 <br>
 ダウンロード後にこのアーカイブファイルを任意のフォルダに展開してください(Windwos 11であればファイルエクスプローラで直接展開できます。Windows 10の場合は7-Zip等のアーカイバを利用して展開してください)。<br>
 
-次に以下のファイル(cef4lib.zip)をダウンロードして展開して、取り出したcef4lib.batをCEF4アーカイブファイルを展開したフォルダ内にコピーします。<br>
+次に以下のファイル(cef4lib.zip)をダウンロードして展開して、取り出したcef4lib.batをCEFアーカイブファイルを展開したフォルダ内にコピーします。<br>
 
 [cef4lib.zip](https://github.com/user-attachments/files/26692036/cef4lib.zip)<br>
 
-CEF4アーカイブファイルを展開したフォルダ内が以下のようになると思いますので、ファイルエクスプローラでdef4lib.batをダブルクリックして実行してください。<br>
+CEFアーカイブファイルを展開したフォルダ内が以下のようになると思いますので、ファイルエクスプローラでdef4lib.batをダブルクリックして実行してください。<br>
 <img width="416" height="363" alt="cef4folder" src="https://github.com/user-attachments/assets/679ec8d0-76e2-40a8-8446-032ca38a6c77" /><br>
 実行中・・・<br>
 
 <img width="597" height="352" alt="cef4bat" src="https://github.com/user-attachments/assets/0c98e0a2-7a35-4a0b-ab95-78809a1cadc3" /><br>
 <br>
-するとcef4というフォルダが作成されていると思います。このフォルダ内には必要な全てのランタイムライブラリとCEF4のドキュメントが収められています。<br>
+するとcef4というフォルダが作成されていると思います。このフォルダ内には必要な全てのランタイムライブラリとCEFのドキュメントが収められています。<br>
 <img width="394" height="238" alt="cef4lib" src="https://github.com/user-attachments/assets/1da9fa09-3850-4667-ab29-ee4ad3dbfe71" />
 <br>
 このcef4フォルダを丸ごとalphadlw.exeがあるフォルダ内にコピーします。以上でaplhadlwを実行できるようになります。
