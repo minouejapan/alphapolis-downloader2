@@ -1,6 +1,10 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.43 2026/08/28 トップページ情報を取得出来ない場合リトライするようにした
+                  ダウンロード時のCPU付加削減のためSleep時間調整とApplication.ProcessMessageを追加挿入した
+                  ウィンドウの位置を保存していなかった不具合を修正した
+                  中止処理が不完全だった不具合を修正した
   3.42 2026/08/18 Naro2mobiから起動するとダウンロード出来ない場合があった不具合を修正した
                   SHParserの不具合(テキスト中の半角空白文字を除去していた)修正を反映した
   3.41 2026/08/14 単体起動時に連続でダウンロードしようとすると失敗する不具合とNaro2mobiから起動した
@@ -135,7 +139,7 @@ interface
 uses
   Windows, Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls, StdCtrls, LMessages,
   Buttons, LazUTF8, uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes,
-  uCEFChromiumEvents, uCEFStringVisitor;
+  uCEFStringVisitor, uCEFChromiumEvents;
 
 type
 
@@ -175,7 +179,6 @@ type
     fCancel,
     Busy,
     fDone,
-    tAcc,
     IsCalled: boolean;
     PrevURL,
     NextURL,
@@ -194,7 +197,8 @@ type
     hWnd: THandle;
     CDS: TCopyDataStruct;
     StartN: integer;
-    IsErr: Boolean;
+    IsErr,
+    IsTmpAcc: Boolean;
     GetSrcCount: integer;
     procedure ExecuteJS;
     function GetHTMLSrc(URLadr: string): string;
@@ -203,16 +207,15 @@ type
     function GetNovelStatus(MainPage: string): string;
     procedure ParseChapter(MainPage: string);
   protected
-    FCanClose  : boolean;  // Set to True in TChromium.OnBeforeClose
-    FClosing   : boolean;  // Set to True in the CloseQuery event.
-
+    // CEF4用の宣言
+    FCanClose: boolean;  // Set to True in TChromium.OnBeforeClose
+    FClosing: boolean;  // Set to True in the CloseQuery event.
     // You have to handle this two messages to call NotifyMoveOrResizeStarted or some page elements will be misaligned.
     procedure WMMove(var aMessage : TWMMove); message WM_MOVE;
     procedure WMMoving(var aMessage : TMessage); message WM_MOVING;
     // You also have to handle these two messages to set GlobalCEFApp.OsmodalLoop
     procedure WMEnterMenuLoop(var aMessage: TMessage); message WM_ENTERMENULOOP;
     procedure WMExitMenuLoop(var aMessage: TMessage); message WM_EXITMENULOOP;
-
     procedure BrowserCreatedMsg(var aMessage : TMessage); message CEF_AFTERCREATED;
 
   public
@@ -366,6 +369,67 @@ begin
   adlForm.Chromium1.RetrieveHTML;
 end;
 
+
+procedure TadlForm.ExecuteJS;
+begin
+  Chromium1.ExecuteJavaScript('encodeURI(document.documentElement.outerHTML)', 'about:blank');
+end;
+
+procedure TadlForm.Chromium1BeforeClose(Sender: TObject;
+			const browser: ICefBrowser);
+begin
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
+end;
+
+procedure StringVisitor(const str: ustring);
+begin
+  with adlForm do
+  begin
+    // HTMLソースを取得済みまたは仮アクセスまたは中止シグナルの場合は再突入させない
+    if fDone or IsTmpAcc or fCancel then
+      Exit;
+		if fTopPage then
+    begin
+      if (Pos('ページが見つかりません', str) > 1) or
+         {(Pos('{"content":{"id"', str) > 1) and }(Pos('<div class="p-content-info">', str) > 1) then
+      begin
+        fHTMLSrc := str;
+        fTopPage := False;
+        fDone := True;
+		  end else begin
+        Inc(GetSrcCount);
+        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
+        if GetSrcCount > 30 then
+        begin
+          fHTMLSrc := '';
+          fTopPage := False;
+				end else
+				  GetSourceCEF4;
+			end;
+		end else begin
+      if Pos('403 ERROR', str) > 0 then
+      begin
+        Sleep(10000); // 10秒待機
+        Chromium1.LoadURL(UTF8Decode(URLadr));
+        Exit;
+			end else if Pos('<div class="p-novel-episode__text"', str) > 1 then
+      begin
+        fDone := True;
+        fHTMLSrc := str;
+		  end else begin
+        Inc(GetSrcCount);
+        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
+        if GetSrcCount > 30 then
+        begin
+          fHTMLSrc := '';
+				end else
+				  GetSourceCEF4;
+			end;
+		end;
+  end;
+end;
+
 procedure TadlForm.FormCreate(Sender: TObject);
 var
   cfg, opt, op, ver: string;
@@ -468,61 +532,6 @@ begin
     fCancel := True;
 end;
 
-procedure TadlForm.ExecuteJS;
-begin
-  Chromium1.ExecuteJavaScript('encodeURI(document.documentElement.outerHTML)', 'about:blank');
-end;
-
-procedure TadlForm.Chromium1BeforeClose(Sender: TObject;
-			const browser: ICefBrowser);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
-end;
-
-procedure StringVisitor(const str: ustring);
-begin
-  with adlForm do
-  begin
-    // HTMLソースを取得済みまたは仮アクセスまたは中止シグナルの場合は再突入させない
-    if fDone or tAcc or fCancel then
-      Exit;
-		if fTopPage then
-    begin
-      if (Pos('ページが見つかりません', str) > 1) or
-         (Pos('{"content":{"id"', str) > 1) and (Pos('<div class="p-content-info">'{'<div id="app-cover-episode-v2"'}{'<div class="episodes">'}, str) > 1) then
-      begin
-        fHTMLSrc := str;
-        fTopPage := False;
-        adlForm.fDone := True;
-		  end else begin
-        Inc(GetSrcCount);
-        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
-        if GetSrcCount > 30 then
-        begin
-          fHTMLSrc := '';
-          fTopPage := False;
-				end else
-				  GetSourceCEF4;
-			end;
-		end else begin
-      if Pos('<div class="p-novel-episode__text"'{'<div class="text " id="novelBody"'}, str) > 1 then
-      begin
-        fHTMLSrc := str;
-        adlForm.fDone := True;
-		  end else begin
-        Inc(GetSrcCount);
-        // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
-        if GetSrcCount > 30 then
-        begin
-          fHTMLSrc := '';
-				end else
-				  GetSourceCEF4;
-			end;
-		end;
-  end;
-end;
-
 function GetSourceHTML: string;
 var
   CefStringVisitor:ICefStringVisitor;
@@ -550,10 +559,11 @@ begin
 
   if URLadr <> '' then
   begin
+    Application.ProcessMessages;
     Sleep(500);
+    Application.ProcessMessages;
     //OCBtnClick(nil);
     //Height := 300;
-    Application.ProcessMessages;
     StartBtnClick(nil);
     Height := 81;
     Close;
@@ -561,10 +571,40 @@ begin
 end;
 
 procedure TadlForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+var
+  cfg, opt: string;
+  f: TextFile;
 begin
   PageList.Free;
   TextPage.Free;
   LogFile.Free;
+  cfg := ChangeFileExt(Application.ExeName, '.cfg');
+  try
+    AssignFile(f, cfg);
+    opt := '';
+    Rewrite(f);
+    Writeln(f, opt);
+    if not isCalled then
+    begin
+      if Left > 0 then
+        opt := IntToStr(Left)
+      else
+        opt := '300';
+      Writeln(f, opt);
+      if Top > 0 then
+        opt := IntToStr(Top)
+      else
+        opt := '200';
+      Writeln(f, opt);
+    end else begin
+      opt := '300';
+      Writeln(f, opt);
+      opt := '200';
+      Writeln(f, opt);
+    end;
+  finally
+    CloseFile(f);
+  end;
 end;
 
 procedure TadlForm.Chromium1AfterCreated(Sender: TObject;
@@ -621,7 +661,9 @@ begin
   end else begin
     Height := FmHt;
     OCBtn.Caption := '▼';
-    Sleep(100);
+    Application.ProcessMessages;
+    Sleep(300);
+    Application.ProcessMessages;
   end;
 end;
 
@@ -630,7 +672,6 @@ var
   n: integer;
 begin
   fDone := False;
-  tAcc := False;
   fHTMLSrc := '';
   GetSrcCount := 0;
   n := 0;
@@ -652,11 +693,10 @@ end;
 // 仮アクセス処理
 procedure TadlForm.TempAcc(URLadr: string);
 begin
-  tAcc := True;
+  IsTmpAcc := True;
   Chromium1.LoadURL(UTF8Decode(URLadr));
-  Application.ProcessMessages;
   Sleep(1500);
-  tAcc := False;
+  IsTmpAcc := False;
 end;
 
 // 小説本文をHTMLから抜き出して整形する
@@ -865,18 +905,20 @@ begin
   if ParamCount = 0 then
     FileName := '';
 
-  // ダウンロード開始を安定させるため最初にアルファポリストップページにアクセスする
-  TempAcc('https://www.alphapolis.co.jp');
-
   fTopPage := True;
-  page := GetHTMLSrc(URL.Text);
+  page := ''; n := 0;
+  while page = '' do
+  begin
+    Inc(n);
+    if n > 5 then
+      Break;
+    page := GetHTMLSrc(URL.Text);
+  end;
   if page <> '' then
   begin
     NvStat := GetNovelStatus(page);
     ParseChapter(page);
-	end;
-  if (page = '') or (PageList.Count = 0) then
-  begin
+	end else begin
     LogFile.Add('エラー：トップページ情報を取得出来ませんでした.');
     fCancel := True;
     Status.Caption :='エラー：トップページ情報を取得出来ませんでした.';
@@ -901,37 +943,30 @@ begin
 Retry:
     n := 1;
     done := False;
-    // ページ情報から本文を取得できるまで10回繰り返す
-    for k := 1 to 10 do
+    page := GetHTMLSrc(URL.Text);
+    // 正しいページ情報を所得出来るまで１０回繰り返す
+    while not IsCorrectPage(page, URL.Text) do
     begin
       if fCancel then
         Break;
-      page := GetHTMLSrc(URL.Text);
-      // 正しいページ情報を所得出来るまで１０回繰り返す
-      while not IsCorrectPage(page, URL.Text) do
+      Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
+      Application.ProcessMessages;
+      Inc(n);
+      // リトライを10回行っても駄目だった場合はエラーとする
+      if n = 10 then
       begin
-        if fCancel then
-          Break;
-        Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
-        // リトライを10回行っても駄目だった場合はエラーとする
-        if n = 10 then
-        begin
-          TextPage.Add(URL.Text + '：リトライに失敗しました.');
-          LogFile.Add(URL.Text + '：リトライに失敗しました.');
-          page := '';
-          Break;
-        end;
-        CEFWindowParent1.SetFocus;  // CEF4にフォーカスを当てる
-        Sleep(500);
-        page := GetHTMLSrc(URL.Text);
-		  end;
-      if ParsePage(page) then
-      begin
-        done := True;
+        TextPage.Add(URL.Text + '：リトライに失敗しました.');
+        LogFile.Add(URL.Text + '：リトライに失敗しました.');
+        IsErr := True;
+        page := '';
         Break;
       end;
-		end;
-    if not done then
+      CEFWindowParent1.SetFocus;  // CEF4にフォーカスを当てる
+      Application.ProcessMessages;
+      Sleep(200);
+      page := GetHTMLSrc(URL.Text);
+    end;
+    if not ParsePage(page) then
     begin
       TextPage.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
       LogFile.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
@@ -946,22 +981,29 @@ Retry:
       Break;
     Elapsed.Caption := '経過時間：' + FormatDateTime('nn:ss', Now - StartTime);
     Inc(ct);
+    Sleep(300);
   end;
   if not fCancel then
   begin
-    Status.Caption := stat + '・・完了';
+    if IsErr then
+    begin
+      Status.Caption := Status.Caption + '・・エラー';
+      if FileName <> '' then
+      begin
+        LogFile.Add('');
+        LogFile.Add('エラーが発生しました.');
+      end;
+		end;
+		Status.Caption := stat + '・・完了';
     if FileName <> '' then
     begin
       TextPage.WriteBOM := True;
       LogFile.WriteBOM  := True;
       TextPage.SaveToFile(FileName, TEncoding.UTF8);
       LogFile.SaveToFile(ChangeFileExt(Filename, '.log'), TEncoding.UTF8);
-    end;
-  end else begin
-    if (FileName = '') or IsErr then
-      Status.Caption := Status.Caption + '・・失敗'
-    else
-      Status.Caption := Status.Caption + '・・中止';
+		end;
+	end else begin
+    Status.Caption := Status.Caption + '・・中止';
     if FileName <> '' then
     begin
       LogFile.Add('');
