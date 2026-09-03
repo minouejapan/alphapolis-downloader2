@@ -1,10 +1,11 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
-  3.44 2026/09/03 ページ取得処理を修正した
+  3.44 2026/09/03 各話ページのHTMLタグが変更されて情報を取得出来なくなっていた不具合を修正した
+                  ページ取得処理を修正した
                   ページ取得エラー時のログ形式を変更した
                   ページ取得エラー時にNaro2mobi側にエラー情報を送るようにした
-                  ダウンロード安定化のため20ページ毎に10秒間の待機時間を入れるようにした
+                  ダウンロード安定化のため20ページ毎に5秒間の待機時間を入れるようにした
                   nvdllibの&#xxxx;デコード処理の不具合を修正したver1.3で再ビルドした
   3.43 2026/08/28 トップページ情報を取得出来ない場合リトライするようにした
                   ダウンロード時のCPU付加削減のためSleep時間調整とApplication.ProcessMessageを追加挿入した
@@ -408,7 +409,7 @@ begin
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
-        if GetSrcCount > 30 then
+        if GetSrcCount > 10 then
         begin
           fHTMLSrc := '';
           fTopPage := False;
@@ -422,14 +423,14 @@ begin
         Sleep(10000); // 10秒待機
         Chromium1.LoadURL(UTF8Decode(URLadr));
         Exit;
-			end else if Pos('<div class="p-novel-episode__text"', str) > 1 then
+			end else if Pos('<div class="p-novel-episode__text', str) > 1 then
       begin
         fDone := True;
         fHTMLSrc := str;
 		  end else begin
         Inc(GetSrcCount);
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
-        if GetSrcCount > 30 then
+        if GetSrcCount > 10 then
         begin
           fDone := True;
           fHTMLSrc := '';
@@ -738,11 +739,12 @@ begin
     subt  := shp.FindRegex('<h2 class="p-novel-episode__episode-title">', '</h2>', False);
     subt  := Trim(subt);
     subt  := Restore2RealChar(subt);
-    body  := shp.Find('div', 'class', 'p-novel-episode__text', False);
+    //body  := shp.Find('div', 'class', 'p-novel-episode__text', False);
+    body  := shp.FindRegex('<div class="p-novel-episode__text.*?>', '</div>', False);
     body  := GetText(body); // HTMLタグの処理
     if chapt <> '' then
       TextPage.Add(AO_CPB + chapt + AO_CPE);
-    if (subt <> '') and (body <> '') and (Pos('<div class="dots-indicator"id="LoadingEpisode">', body) = 0) then
+    if (subt <> '') and (body <> '') then
     begin
       TextPage.Add(AO_SEB + subt + AO_SEE);
       TextPage.Add(body);
@@ -751,8 +753,6 @@ begin
       TextPage.Add('');
     end else begin
       Result := False;
-      //TextPage.Add('本文を取得出来ませんでした.');
-      //TextPage.Add(AO_PB2);
     end;
 	finally
     shp.Free;
@@ -889,10 +889,10 @@ end;
 procedure TadlForm.StartBtnClick(Sender: TObject);
 var
   page, stat: string;
-  i, cnt, j, sc, ct, n: integer;
+  i, cnt, j, sc, ct, n, rn: integer;
   pgerr: boolean;
 label
-  Quit;
+  Retry, Quit;
 begin
   if UTF8Pos('https://www.alphapolis.co.jp/novel/', URL.Text) = 0 then
   begin
@@ -952,10 +952,12 @@ begin
     URL.Text := 'https://www.alphapolis.co.jp' + PageList[i - 1];
     if (i mod 20) = 0 then
     begin
-      Status.Caption := stat + ' 10秒間待機...';
+      Status.Caption := stat + ' 5秒間待機...';
       Application.ProcessMessages;
-      Sleep(10000);
+      Sleep(5000);
 		end;
+    rn := 0;
+Retry:
 		n := 1;
     pgerr:= False;
     page := GetHTMLSrc(URL.Text);
@@ -968,7 +970,7 @@ begin
       Application.ProcessMessages;
       Inc(n);
       // リトライを30回行っても駄目だった場合はエラーとする
-      if n = 30 then
+      if n = 10 then
       begin
         TextPage.Add(URL.Text + '：リトライに失敗しました.');
         LogFile.Add(URL.Text + '：リトライに失敗しました.');
@@ -976,17 +978,23 @@ begin
         page := '';
         Break;
       end;
-      CEFWindowParent1.SetFocus;  // CEF4にフォーカスを当てる
+      CEFWindowParent1.SetFocus;  // CEFにフォーカスを当てる
       Application.ProcessMessages;
       Sleep(100);
       page := GetHTMLSrc(URL.Text);
     end;
-    if not ParsePage(page) then
+    if not ParsePage(page) then   // ページ情報を取得エラー
     begin
-      TextPage.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
-      LogFile.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
-      IsErr := True;
-      pgerr := True;
+      if rn < 3 then              // 3回までリトライする
+      begin
+        Inc(rn);
+        Goto Retry;
+			end else begin
+			  TextPage.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
+        LogFile.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
+        IsErr := True;
+        pgerr := True;
+			end;
 		end;
 		if hWnd <> 0 then
     begin
