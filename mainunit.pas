@@ -1,11 +1,16 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.44 2026/09/03 ページ取得処理を修正した
+                  ページ取得エラー時のログ形式を変更した
+                  ページ取得エラー時にNaro2mobi側にエラー情報を送るようにした
+                  ダウンロード安定化のため20ページ毎に10秒間の待機時間を入れるようにした
+                  nvdllibの&#xxxx;デコード処理の不具合を修正したver1.3で再ビルドした
   3.43 2026/08/28 トップページ情報を取得出来ない場合リトライするようにした
                   ダウンロード時のCPU付加削減のためSleep時間調整とApplication.ProcessMessageを追加挿入した
                   ウィンドウの位置を保存していなかった不具合を修正した
                   中止処理が不完全だった不具合を修正した
-				  ダウロード出来ないページがあっても最後までダウンロードしてファイルを保存するようにした
+                  ダウロード出来ないページがあっても最後までダウンロードしてファイルを保存するようにした
   3.42 2026/08/18 Naro2mobiから起動するとダウンロード出来ない場合があった不具合を修正した
                   SHParserの不具合(テキスト中の半角空白文字を除去していた)修正を反映した
   3.41 2026/08/14 単体起動時に連続でダウンロードしようとすると失敗する不具合とNaro2mobiから起動した
@@ -134,6 +139,7 @@ unit MainUnit;
 
 {$mode delphi}
 {$codepage utf8}
+//{$DEFINE DEBUG}
 
 interface
 
@@ -262,6 +268,7 @@ const
 
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
+  WM_PGFAIL  = WM_USER + 31;
 
 
 { TadlForm }
@@ -405,6 +412,7 @@ begin
         begin
           fHTMLSrc := '';
           fTopPage := False;
+          fDone := True;
 				end else
 				  GetSourceCEF4;
 			end;
@@ -423,6 +431,7 @@ begin
         // 一定回数リトライを繰り返してもHTMLソースを取得出来ない場合はエラーとする
         if GetSrcCount > 30 then
         begin
+          fDone := True;
           fHTMLSrc := '';
 				end else
 				  GetSourceCEF4;
@@ -678,14 +687,14 @@ begin
   n := 0;
 
   Chromium1.LoadURL(UTF8Decode(URLadr));
-  while fHTMLSrc = '' do
+  while not fDone do
   begin
     Application.ProcessMessages;
-    Sleep(100);
+    Sleep(500);
     if fCancel then
       Break;
     Inc(n);
-    if n > 30 then
+    if n > 5 then
       Break;
 	end;
   Result := fHTMLSrc;
@@ -880,10 +889,10 @@ end;
 procedure TadlForm.StartBtnClick(Sender: TObject);
 var
   page, stat: string;
-  i, cnt, j, k, sc, ct, n: integer;
-  done: boolean;
+  i, cnt, j, sc, ct, n: integer;
+  pgerr: boolean;
 label
-  Retry, Quit;
+  Quit;
 begin
   if UTF8Pos('https://www.alphapolis.co.jp/novel/', URL.Text) = 0 then
   begin
@@ -941,9 +950,14 @@ begin
     stat := '各話を取得中 [' + Format('%3d', [i]) + '/' + Format('%3d', [cnt]) + '(' + Format('%d', [(ct * 100) div sc]) + '%)]';
     Status.Caption := stat;
     URL.Text := 'https://www.alphapolis.co.jp' + PageList[i - 1];
-Retry:
-    n := 1;
-    done := False;
+    if (i mod 20) = 0 then
+    begin
+      Status.Caption := stat + ' 10秒間待機...';
+      Application.ProcessMessages;
+      Sleep(10000);
+		end;
+		n := 1;
+    pgerr:= False;
     page := GetHTMLSrc(URL.Text);
     // 正しいページ情報を所得出来るまで１０回繰り返す
     while not IsCorrectPage(page, URL.Text) do
@@ -953,8 +967,8 @@ Retry:
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       Application.ProcessMessages;
       Inc(n);
-      // リトライを10回行っても駄目だった場合はエラーとする
-      if n = 10 then
+      // リトライを30回行っても駄目だった場合はエラーとする
+      if n = 30 then
       begin
         TextPage.Add(URL.Text + '：リトライに失敗しました.');
         LogFile.Add(URL.Text + '：リトライに失敗しました.');
@@ -964,20 +978,33 @@ Retry:
       end;
       CEFWindowParent1.SetFocus;  // CEF4にフォーカスを当てる
       Application.ProcessMessages;
-      Sleep(200);
+      Sleep(100);
       page := GetHTMLSrc(URL.Text);
     end;
     if not ParsePage(page) then
     begin
-      TextPage.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
-      LogFile.Add(URL.Text + '：ページ情報を取得出来ませんでした.');
+      TextPage.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
+      LogFile.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
       IsErr := True;
+      pgerr := True;
 		end;
 		if hWnd <> 0 then
     begin
       Application.ProcessMessages;
       SendMessage(hWnd, WM_DLINFO, i, 1);
-    end;
+      // ページ取得失敗時はNaro2mobi側に失敗情報を送る
+      if pgerr then
+        SendMessage(hWnd, WM_PGFAIL, i, 1);
+{$IFDEF DEBUG}
+      // DEBUG用
+      if (i mod 10) = 0 then
+      begin
+        SendMessage(hWnd, WM_PGFAIL, i, 1);
+        TextPage.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
+        LogFile.Add('第 ' + IntToStr(i) + ' 話の情報を取得出来ませんでした(' + URL.Text + ')');
+			end;
+{$ENDIF}
+		end;
     if fCancel then
       Break;
     Elapsed.Caption := '経過時間：' + FormatDateTime('nn:ss', Now - StartTime);
