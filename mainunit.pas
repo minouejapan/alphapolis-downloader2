@@ -1,6 +1,8 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.45 2026/09/05 挿絵変換方法を変更した
+                  各話ページの情報検索方法を修正した
   3.44 2026/09/03 各話ページのHTMLタグが変更されて情報を取得出来なくなっていた不具合を修正した
                   ページ取得処理を修正した
                   ページ取得エラー時のログ形式を変更した
@@ -330,11 +332,27 @@ end;
 // 但し、画像ファイルはダウンロードせずにリンク先をそのまま埋め込む
 function ChangeImage(Base: string): string;
 var
-  tmp: string;
+  tmp, src, dst: string;
+  r: TRegExpr;
 begin
   tmp := Base;
-  tmp := ReplaceRegExpr('<div class=.*?<img src="', tmp, AO_PIB);
-  tmp := ReplaceRegExpr('" alt=""></a></div>', tmp, AO_PIE);
+  r := TRegExpr.Create;
+  try
+    r.Expression  := '<div class=.*?<img src=".*?" alt=""></a></div>';
+    r.InputString := tmp;
+    if r.Exec then
+    begin
+      repeat
+        src := r.Match[0];
+        dst := ReplaceRegExpr('<div class=.*?<img src="', src, AO_PIB);
+        dst := ReplaceRegExpr('" alt=""></a></div>', dst, AO_PIE);
+        tmp := ReplaceRegExpr(src, tmp, dst);
+        r.InputString := tmp;
+      until not r.Exec;
+    end;
+	finally
+    r.Free;
+	end;
   Result := tmp;
 end;
 
@@ -729,18 +747,17 @@ begin
 
   shp := TSHParser.Create(Page);
   try
-    chapt := shp.FindRegex('<div class="p-novel-episode__chapter-title">', '</div>', False);
+    chapt := shp.Find('div', 'class', 'p-novel-episode__chapter-titl.*?',  False);
     chapt := Trim(chapt);
     chapt := Restore2RealChar(chapt);
     if Chapter = chapt then
       chapt := ''
     else
       Chapter := chapt;
-    subt  := shp.FindRegex('<h2 class="p-novel-episode__episode-title">', '</h2>', False);
+    subt  := shp.Find('h2', 'class', 'p-novel-episode__episode-titl.*?', False);
     subt  := Trim(subt);
     subt  := Restore2RealChar(subt);
-    //body  := shp.Find('div', 'class', 'p-novel-episode__text', False);
-    body  := shp.FindRegex('<div class="p-novel-episode__text.*?>', '</div>', False);
+    body  := shp.Find('div', 'class', 'p-novel-episode__tex.*?', False);
     body  := GetText(body); // HTMLタグの処理
     if chapt <> '' then
       TextPage.Add(AO_CPB + chapt + AO_CPE);
