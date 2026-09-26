@@ -2,6 +2,8 @@
 
 aplhadlwはアルファポリスで公開されている小説を青空文庫形式のテキストファイルでダウンロードするためのツールです。<br>
 **※レンタル作品等の有料作品はダウンロード出来ません。**<br>
+<img width="804" height="108" alt="alphadlw346b" src="https://github.com/user-attachments/assets/5b683656-ae88-4cef-9e86-e84ac54d217d" />
+
 
 ### 動作環境
 Windows10/11上で動作します。
