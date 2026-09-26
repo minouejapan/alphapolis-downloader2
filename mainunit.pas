@@ -1,6 +1,8 @@
 (*
   アルファポリス小説ダウンローダー[alphadlw]
 
+  3.46 2026/09/15 本文中に<>で囲まれた語句を不要なHTMLタグとして削除していた不具合を修正した
+                  DLリトライ後にページ取得エラーとせずに、リトライが成功するまで一定時間待機を繰り返すモードを追加した
   3.45 2026/09/05 挿絵変換方法を変更した
                   各話ページの情報検索方法を修正した
   3.44 2026/09/03 各話ページのHTMLタグが変更されて情報を取得出来なくなっていた不具合を修正した
@@ -147,9 +149,10 @@ unit MainUnit;
 interface
 
 uses
-  Windows, Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls, StdCtrls, LMessages,
-  Buttons, LazUTF8, uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes,
-  uCEFStringVisitor, uCEFChromiumEvents;
+  Windows, Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls,
+	StdCtrls, LMessages, Buttons, Spin, LazUTF8, uCEFChromium, uCEFWindowParent,
+	uCEFInterfaces, uCEFConstants, uCEFTypes, uCEFStringVisitor,
+	uCEFChromiumEvents;
 
 type
 
@@ -157,12 +160,15 @@ type
   TadlForm = class(TForm)
 		CancelBtn: TButton;
 		CEFWindowParent1: TCEFWindowParent;
+		IsStandby: TCheckBox;
 		Chromium1: TChromium;
 		Elapsed: TLabel;
 		Label1: TLabel;
+		Label2: TLabel;
 		MainPanel: TPanel;
 		NvTitle: TLabel;
 		OCBtn: TSpeedButton;
+		StdbySec: TSpinEdit;
 		StartBtn: TButton;
 		Status: TLabel;
 		Timer1: TTimer;
@@ -181,6 +187,7 @@ type
     procedure FormCreate(Sender: TObject);
 		procedure FormKeyPress(Sender: TObject; var Key: char);
 		procedure FormShow(Sender: TObject);
+		procedure IsStandbyClick(Sender: TObject);
 		procedure OCBtnClick(Sender: TObject);
 		procedure StartBtnClick(Sender: TObject);
 		procedure Timer1Timer(Sender: TObject);
@@ -272,6 +279,7 @@ const
 // ユーザメッセージID
   WM_DLINFO  = WM_USER + 30;
   WM_PGFAIL  = WM_USER + 31;
+  WM_STNDBY  = WM_USER + 32;
 
 
 { TadlForm }
@@ -386,6 +394,7 @@ begin
   tmp := ChangeRuby(tmp);       // ルビのタグを変換する
   tmp := ChangeEm(tmp);         // 強調（傍点）タグを変換する
   tmp := Restore2RealChar(tmp); // エスケースされた特殊文字を本来の文字に変換する
+  tmp := AfterDecord(tmp);      // 最後に&lt;と&gt;を<>に戻す
   tmp := TrimHead(tmp);         // 本文先頭の余分なスペースを除去する
   tmp := UTF8StringReplace(tmp, ' ', '', [rfReplaceAll]);  // 本文中の半角スペースを削除
   Result := tmp;
@@ -461,7 +470,7 @@ end;
 
 procedure TadlForm.FormCreate(Sender: TObject);
 var
-  cfg, opt, op, ver: string;
+  cfg, opt, op, ver, lt, ht: string;
   f: TextFile;
   i: integer;
 begin
@@ -485,18 +494,26 @@ begin
       Readln(f, opt);
       if opt = '' then
         opt := '1';
+      Readln(f, lt);
+      Readln(f, ht);
       if ParamCount = 0 then
       begin
-        Readln(f, Opt);
-        if Opt = '' then
-          Opt := '300';
-        Left := StrToInt(Opt);
-        Readln(f, Opt);
-        if Opt = '' then
-          Opt := '200';
-        Top := StrToInt(Opt);
-      end;
-    finally
+        if lt = '' then
+          lt := '300';
+        Left := StrToInt(lt);
+        if ht = '' then
+          ht := '200';
+        Top := StrToInt(ht);
+			end;
+      Readln(f, opt);
+      if opt = '' then
+        opt := '0';
+      IsStandby.Checked := opt = '1';
+      Readln(f, opt);
+      if opt = '' then
+        opt := '60';
+      StdbySec.Value := StrToInt(opt);
+		finally
       CloseFile(f);
     end;
   end;
@@ -628,9 +645,16 @@ begin
     end else begin
       opt := '300';
       Writeln(f, opt);
-      opt := '200';
+opt := '200';
       Writeln(f, opt);
     end;
+    if IsStandby.Checked then
+      opt := '1'
+    else
+      opt := '0';
+    Writeln(f, opt);
+    opt := IntToStr(StdbySec.Value);
+    Writeln(f, opt);
   finally
     CloseFile(f);
   end;
@@ -676,6 +700,13 @@ begin
   end;
   if not(Chromium1.CreateBrowser(CEFWindowParent1)) then
     Timer1.Enabled := True;
+end;
+
+procedure TadlForm.IsStandbyClick(Sender: TObject);
+begin
+  inherited;
+
+  StdbySec.Enabled := IsStandby.Checked;
 end;
 
 procedure TadlForm.OCBtnClick(Sender: TObject);
@@ -906,7 +937,7 @@ end;
 procedure TadlForm.StartBtnClick(Sender: TObject);
 var
   page, stat: string;
-  i, cnt, j, sc, ct, n, rn: integer;
+  i, cnt, j, sc, ct, n, rn, rt: integer;
   pgerr: boolean;
 label
   Retry, Quit;
@@ -986,14 +1017,39 @@ Retry:
       Status.Caption := stat + 'リトライ中(' + IntToStr(n) + ')';
       Application.ProcessMessages;
       Inc(n);
-      // リトライを30回行っても駄目だった場合はエラーとする
+      // リトライを30回行っても駄目だった場合
       if n = 10 then
       begin
-        TextPage.Add(URL.Text + '：リトライに失敗しました.');
-        LogFile.Add(URL.Text + '：リトライに失敗しました.');
-        IsErr := True;
-        page := '';
-        Break;
+        // エラー待機がOFFの場合はリトライ失敗
+        if not IsStandby.Checked then
+        begin
+          TextPage.Add(URL.Text + '：リトライに失敗しました.');
+          LogFile.Add(URL.Text + '：リトライに失敗しました.');
+          IsErr := True;
+          page := '';
+          Break;
+        // エラー待機の場合は設定秒数分待機して再度リトライに入る
+        end else begin
+          Status.Caption := stat + '強制待機に入りました...';
+      		if hWnd <> 0 then
+          begin
+            // 強制待機モードに入ったことをNaro2mobiに送る
+            Application.ProcessMessages;
+            SendMessage(hWnd, WM_STNDBY, i, 1);
+					end;
+					for rt := 1 to StdbySec.Value do
+          begin
+            // 設定秒数間を1秒づつ待機しつつ中止シグナルを監視する
+            Sleep(1000);
+            Application.ProcessMessages;
+            if fCancel then
+            begin
+              TextPage.Add(URL.Text + '：エラー待機中に手動で中止されました.');
+              LogFile.Add(URL.Text + '：エラー待機中に手動で中止されました.');
+              Break;
+						end;
+					end;
+        end;
       end;
       CEFWindowParent1.SetFocus;  // CEFにフォーカスを当てる
       Application.ProcessMessages;
